@@ -40,7 +40,7 @@ services:
   # ---------------------------------------------------------------------------
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile
       target: development
     image: logiflow/frontend:dev
@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
     working_dir: /app
     volumes:
-      - ./frontend:/app
+      - ../frontend:/app
       - frontend-node-modules:/app/node_modules
       - frontend-next-cache:/app/.next
     ports:
@@ -75,7 +75,7 @@ services:
   # ---------------------------------------------------------------------------
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
       target: development
     image: logiflow/backend:dev
@@ -83,7 +83,7 @@ services:
     restart: unless-stopped
     working_dir: /var/www/html
     volumes:
-      - ./backend:/var/www/html
+      - ../backend:/var/www/html
       - backend-vendor:/var/www/html/vendor
     expose:
       - "9000"
@@ -142,7 +142,7 @@ services:
     container_name: logiflow-webserver
     restart: unless-stopped
     volumes:
-      - ./backend:/var/www/html:ro
+      - ../backend:/var/www/html:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
     ports:
       - "${NGINX_PORT}:80"
