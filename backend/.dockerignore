@@ -1,0 +1,33 @@
+# =============================================================================
+# LogiFlow Backend — Production Docker Build Ignore Rules
+# =============================================================================
+
+# --- Local Environment & Application Secrets ---
+.env
+.env.production
+.env.local
+.env.*.local
+*.auth
+.git
+.github
+
+# --- Backend Dependencies (Brought in via named volumes/containers) ---
+vendor/
+node_modules/
+
+# --- Laravel Local Framework Cache & Runtime Operations ---
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/testing/*
+storage/framework/views/*
+storage/logs/*.log
+
+# --- Local Workspace / OS Junk Files ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.phpunit.cache/
