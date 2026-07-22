@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use App\Support\Tenancy\TenantManager;
+use App\Contracts\DispatchesOrders;
+use App\Actions\Dispatches\DispatchOrdersAction;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -14,6 +16,9 @@ class AppServiceProvider extends ServiceProvider
     {
         // Binds the TenantManager as a request-scoped singleton
         $this->app->singleton(TenantManager::class, TenantManager::class);
+
+        // Inversion of Control interface mapping
+        $this->app->bind(DispatchesOrders::class, DispatchOrdersAction::class);
     }
 
     /**
