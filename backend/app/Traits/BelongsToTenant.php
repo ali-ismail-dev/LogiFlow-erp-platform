@@ -12,6 +12,11 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @mixin Model
+ * @method static void addGlobalScope($scope, $implementation = null)
+ * @method static void creating(\Closure $callback)
+ */
 trait BelongsToTenant
 {
     public static function bootBelongsToTenant(): void

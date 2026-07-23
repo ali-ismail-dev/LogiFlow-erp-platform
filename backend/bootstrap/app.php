@@ -9,16 +9,21 @@ use App\Http\Middleware\TenantMiddleware;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',
+        api: __DIR__ . '/../routes/api.php',
         commands: __DIR__ . '/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Appends the multi-tenant isolation filter globally across all incoming API requests
-        $middleware->api(prepend: [
-            TenantMiddleware::class,
+        // REQUIRED: Activates Sanctum's cross-domain SPA session cookie tracking layer
+        $middleware->statefulApi();
+
+        // ALIAS MAP: Links the short route handle 'tenant' to our strict isolation interceptor
+        $middleware->alias([
+            'tenant' => TenantMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Guarantees all API errors return clean JSON structures instead of HTML splash views
         $exceptions->shouldRenderJsonWhen(
             fn(Request $request) => $request->is('api/*'),
         );
