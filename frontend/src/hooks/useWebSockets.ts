@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
+import type { ChannelAuthorizationCallback } from 'pusher-js';
 
 if (typeof window !== 'undefined') {
   // Echo's reverb driver expects a global Pusher reference -- Reverb speaks
@@ -72,7 +73,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8
 // exactly the "memory degradation under high payload density" failure mode
 // this hook exists to avoid -- N components should mean N listeners on one
 // socket, not N sockets.
-let sharedEcho: Echo | null = null;
+let sharedEcho: Echo<'reverb'> | null = null;
 const channelRefCounts = new Map<string, number>();
 
 function readCookie(name: string): string | null {
@@ -125,10 +126,10 @@ async function authorizeChannel(channelName: string, socketId: string) {
   return response.json();
 }
 
-function getSharedEcho(): Echo {
+function getSharedEcho(): Echo<'reverb'> {
   if (sharedEcho) return sharedEcho;
 
-  sharedEcho = new Echo({
+  sharedEcho = new Echo<'reverb'>({
     broadcaster: 'reverb',
     key: process.env.NEXT_PUBLIC_REVERB_APP_KEY,
     wsHost: process.env.NEXT_PUBLIC_REVERB_HOST,
@@ -137,10 +138,15 @@ function getSharedEcho(): Echo {
     forceTLS: (process.env.NEXT_PUBLIC_REVERB_SCHEME ?? 'https') === 'https',
     enabledTransports: ['ws', 'wss'],
     authorizer: (channel: { name: string }) => ({
-      authorize(socketId: string, callback: (error: boolean, data: unknown) => void) {
+      authorize(socketId: string, callback: ChannelAuthorizationCallback) {
         authorizeChannel(channel.name, socketId)
-          .then((data) => callback(false, data))
-          .catch((error) => callback(true, error));
+          .then((data) => callback(null, data))
+          .catch((error) =>
+            callback(
+              error instanceof Error ? error : new Error(String(error)),
+              null,
+            ),
+          );
       },
     }),
   });
