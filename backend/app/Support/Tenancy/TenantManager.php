@@ -28,4 +28,29 @@ final class TenantManager
     {
         return $this->tenant !== null;
     }
+
+    /**
+     * Set the tenant context directly using a raw numeric or string identifier.
+     * Crucial for CLI background workers/queues where no HTTP request exists.
+     */
+    public function setTenantId(int|string|null $id): void
+    {
+        if (is_null($id)) {
+            $this->forget();
+            return;
+        }
+
+        // Resolves or mocks a temporary tenant container instance for scope checks
+        $tenant = new \App\Models\Tenant();
+        $tenant->id = (int) $id;
+        $this->resolve($tenant);
+    }
+
+    /**
+     * Explicit wipe-out loop to satisfy the queue worker process isolation pattern.
+     */
+    public function clear(): void
+    {
+        $this->forget();
+    }
 }
