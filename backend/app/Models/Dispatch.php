@@ -3,8 +3,6 @@
 declare(strict_types=1);
 
 namespace App\Models;
-// Maps the Dispatch model to the DispatchTrip name contract expected by the background jobs
-class_alias(Dispatch::class, 'App\Models\DispatchTrip');
 
 use App\Enums\DispatchStatus;
 use App\Traits\BelongsToTenant;
@@ -12,7 +10,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-
 
 class Dispatch extends Model
 {
@@ -45,12 +42,16 @@ class Dispatch extends Model
         return $this->belongsTo(Warehouse::class);
     }
 
+    public function stops(): HasMany
+    {
+        return $this->hasMany(Stop::class)->orderBy('sequence');
+    }
+
     /**
-     * Fetches the current active stop in the dispatch timeline sequence.
+     * Relational helper for active stop sequencing tracking metrics.
      */
     public function getCurrentStopAttribute(): ?Stop
     {
-        // Finds the first stop that isn't finalized (completed/failed) sorted by sequence order
         return $this->stops()
             ->whereNotIn('status', [\App\Enums\StopStatus::Completed, \App\Enums\StopStatus::Failed])
             ->orderBy('sequence', 'asc')
@@ -58,20 +59,17 @@ class Dispatch extends Model
     }
 
     /**
-     * Simulated connection to driver layer for user validation payloads.
+     * Operational helper mapping to fit driver identity array contracts.
      */
     public function getDriverAttribute(): ?object
     {
-        // Plausible placeholder return data object mapping to fit the payload contract cleanly
         if (is_null($this->driver_name)) return null;
         return (object) [
-            'id' => $this->id, // Use an opaque connection id structure
+            'id' => $this->id,
             'name' => $this->driver_name
         ];
     }
-
-    public function stops(): HasMany
-    {
-        return $this->hasMany(Stop::class)->orderBy('sequence');
-    }
 }
+
+// FIX: Declare the structural class alias AFTER the class token loop closes completely
+class_alias(Dispatch::class, 'App\Models\DispatchTrip');

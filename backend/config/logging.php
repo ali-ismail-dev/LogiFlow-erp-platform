@@ -64,6 +64,13 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
         ],
+        // Dead Letter Queue Containment Logger for Phase 6 Async failures
+        'dlq' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/dlq.log'),
+            'level' => 'critical',
+            'days' => 14,
+        ],
 
         'daily' => [
             'driver' => 'daily',
@@ -89,7 +96,7 @@ return [
             'handler_with' => [
                 'host' => env('PAPERTRAIL_URL'),
                 'port' => env('PAPERTRAIL_PORT'),
-                'connectionString' => 'tls://'.env('PAPERTRAIL_URL').':'.env('PAPERTRAIL_PORT'),
+                'connectionString' => 'tls://' . env('PAPERTRAIL_URL') . ':' . env('PAPERTRAIL_PORT'),
             ],
             'processors' => [PsrLogMessageProcessor::class],
         ],
