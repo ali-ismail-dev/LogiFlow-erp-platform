@@ -9,6 +9,7 @@ use App\Traits\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Enums\Logistics\CarrierShipmentStatus;
 
 class Stop extends Model
 {
@@ -31,7 +32,7 @@ class Stop extends Model
     {
         return [
             'destination_address' => 'array',
-            'status' => StopStatus::class,
+            'status' => CarrierShipmentStatus::class, // Bind the Phase 7 Carrier vocabulary casting map
             'sequence' => 'integer',
             'eta' => 'immutable_datetime',
             'arrived_at' => 'immutable_datetime',

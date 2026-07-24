@@ -34,5 +34,11 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    // Phase 7: Multi-Vendor Inbound Carrier Gateway Secret Registries
+    'carriers' => [
+        'mock_carrier' => [
+            'webhook_secret' => env('MOCK_CARRIER_WEBHOOK_SECRET', 'logiflow_secret_hash_xyz789'),
+        ],
+    ],
 
 ];
