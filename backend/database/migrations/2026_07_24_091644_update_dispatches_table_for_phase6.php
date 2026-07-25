@@ -18,13 +18,16 @@ return new class extends Migration
             $table->string('ledger_status')->default('none'); // 'none' | 'queued' | 'posted' | 'exception'
             $table->text('ledger_error')->nullable(); // Using explicit TEXT to avoid VARCHAR truncation crashes
             $table->timestampTz('ledger_failed_at')->nullable();
+
+            // Carrier webhook correlation / matching field for inbound tracking updates
+            $table->string('carrier_waybill_reference')->nullable()->unique();
         });
     }
 
     public function down(): void
     {
         Schema::table('dispatches', function (Blueprint $table) {
-            $table->dropColumn(['manifest_path', 'ledger_status', 'ledger_error', 'ledger_failed_at']);
+            $table->dropColumn(['manifest_path', 'ledger_status', 'ledger_error', 'ledger_failed_at', 'carrier_waybill_reference']);
         });
     }
 };

@@ -1,18 +1,20 @@
 <?php
 
 use App\Http\Controllers\Api\V1\DispatchController;
+use App\Http\Controllers\Api\V1\Webhooks\CarrierWebhookController;
 use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
 | API Routes — v1
 |--------------------------------------------------------------------------
-| Middleware order is deliberate: `tenant` runs first so an unrecognized
-| subdomain fails closed with a 404 before we even look for a session —
-| an invalid tenant should never reveal whether a valid session exists.
-| `auth:sanctum` then confirms the (host-only, tenant-scoped) session
-| cookie belongs to an authenticated user of *this* tenant.
+| Middleware sequencing is deterministic. Non-tenant server-to-server 
+| webhooks bypass standard session cookie validations using explicit filters.
 */
+
+// Secure, optimized public gateway path matching the Phase 7/8 contract verbatim
+Route::post('/v1/webhooks/carrier/{carrier}', CarrierWebhookController::class)
+    ->name('api.v1.webhooks.carrier');
 
 Route::middleware(['tenant', 'auth:sanctum'])
     ->prefix('v1')

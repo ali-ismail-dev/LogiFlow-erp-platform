@@ -71,7 +71,7 @@ final class CarrierWebhookController extends Controller
             'raw_carrier_status_code' => ['nullable', 'string'],
         ])->validate();
 
-        $dispatch = Dispatch::query()
+        $dispatch = Dispatch::withoutTenancy()
             ->where('carrier_waybill_reference', $validated['carrier_waybill_reference'])
             ->first();
 
@@ -100,7 +100,8 @@ final class CarrierWebhookController extends Controller
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
-        $dispatch->refresh()->load('stops');
+        $dispatch->refresh();
+        $dispatch->load(['stops' => fn($query) => $query->withoutTenancy()]);
 
         DispatchMovementUpdated::dispatch($dispatch);
 
@@ -132,7 +133,7 @@ final class CarrierWebhookController extends Controller
     private function applyStopLevelUpdate(Dispatch $dispatch, int $stopSequence, CarrierTrackingUpdate $update): void
     {
         /** @var Stop|null $stop */
-        $stop = $dispatch->stops()->where('sequence', $stopSequence)->first();
+        $stop = $dispatch->stops()->withoutTenancy()->where('sequence', $stopSequence)->first();
 
         if ($stop === null) {
             throw new RuntimeException(sprintf(
@@ -154,6 +155,7 @@ final class CarrierWebhookController extends Controller
         $dispatch->update(['status' => $update->status->value]);
 
         $dispatch->stops()
+            ->withoutTenancy()
             ->whereNotIn('status', [
                 CarrierShipmentStatus::Delivered->value,
                 CarrierShipmentStatus::DeliveryFailed->value,

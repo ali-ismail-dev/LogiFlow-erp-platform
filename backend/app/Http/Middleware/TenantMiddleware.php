@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Exceptions\TenantContextNotResolvedException;
 use App\Models\Tenant;
 use App\Support\Tenancy\TenantManager;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class TenantMiddleware
 {
@@ -22,7 +22,7 @@ final class TenantMiddleware
         $slug = $this->extractSlug($request);
 
         if ($slug === null) {
-            throw new NotFoundHttpException('Unable to resolve a tenant subdomain from this request.');
+            throw TenantContextNotResolvedException::forRoute($request->path());
         }
 
         /** @var Tenant|null $tenant */
@@ -32,7 +32,7 @@ final class TenantMiddleware
             ->first();
 
         if ($tenant === null) {
-            throw new NotFoundHttpException("No active tenant matches [{$slug}].");
+            throw TenantContextNotResolvedException::forRoute($request->path());
         }
 
         $this->tenantManager->resolve($tenant);
@@ -42,15 +42,23 @@ final class TenantMiddleware
 
     private function extractSlug(Request $request): ?string
     {
-        $host = $request->getHost();
+        $host = $request->header('host')
+            ?? $request->server->get('HTTP_HOST')
+            ?? $request->getHost();
+
+        if ($host === null || $host === '') {
+            return null;
+        }
+
+        $host = strtolower(trim((string) $host));
+        $host = preg_replace('/:\d+$/', '', $host) ?? $host;
         $segments = explode('.', $host);
 
         if (count($segments) < 2) {
             return null;
         }
 
-        // FIX: Extract the first segment element string explicitly before converting case
-        $slug = strtolower($segments[0]);
+        $slug = trim($segments[0]);
 
         return $slug !== '' ? $slug : null;
     }

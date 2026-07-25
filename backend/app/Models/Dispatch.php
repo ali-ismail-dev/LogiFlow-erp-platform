@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\DispatchStatus;
+use App\Enums\Logistics\CarrierShipmentStatus;
 use App\Traits\BelongsToTenant;
+use BackedEnum;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,6 +24,7 @@ class Dispatch extends Model
         'driver_name',
         'vehicle_identifier',
         'status',
+        'carrier_waybill_reference',
         'scheduled_at',
         'departed_at',
         'completed_at',
@@ -30,11 +33,32 @@ class Dispatch extends Model
     protected function casts(): array
     {
         return [
-            'status' => DispatchStatus::class,
             'scheduled_at' => 'immutable_datetime',
             'departed_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',
         ];
+    }
+
+    public function getStatusAttribute(mixed $value): DispatchStatus|CarrierShipmentStatus|string|null
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if ($enum = DispatchStatus::tryFrom((string) $value)) {
+            return $enum;
+        }
+
+        if ($enum = CarrierShipmentStatus::tryFrom((string) $value)) {
+            return $enum;
+        }
+
+        return (string) $value;
+    }
+
+    public function setStatusAttribute(mixed $value): void
+    {
+        $this->attributes['status'] = $value instanceof BackedEnum ? $value->value : (string) $value;
     }
 
     public function warehouse(): BelongsTo
