@@ -1,0 +1,117 @@
+name: LogiFlow Continuous Integration
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # TASK 1: Backend API Test Suite & Code Coverage Check
+  # ---------------------------------------------------------------------------
+  backend-test:
+    name: Backend API Test Suite
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: logiflow_testing
+          POSTGRES_USER: forge
+          POSTGRES_PASSWORD: secret_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forge -d logiflow_testing"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.4 Runtime Environment
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, bcmath, pdo_pgsql, pgsql, zip, intl, pcntl
+          coverage: xdebug
+
+      - name: Locate Backend Workspace Directory
+        run: echo "WORKING_DIR=backend" >> $GITHUB_ENV
+
+      - name: Install Composer Dependencies
+        run: |
+          cd ${{ env.WORKING_DIR }}
+          composer install --no-ansi --no-interaction --no-scripts --prefer-dist
+
+      - name: Prepare Test Environment Configurations
+        run: |
+          cd ${{ env.WORKING_DIR }}
+          cp .env.example .env
+          echo "DB_CONNECTION=pgsql" >> .env
+          echo "DB_HOST=127.0.0.1" >> .env
+          echo "DB_PORT=5432" >> .env
+          echo "DB_DATABASE=logiflow_testing" >> .env
+          echo "DB_USERNAME=forge" >> .env
+          echo "DB_PASSWORD=secret_password" >> .env
+          echo "CACHE_STORE=redis" >> .env
+          echo "REDIS_HOST=127.0.0.1" >> .env
+          echo "QUEUE_CONNECTION=sync" >> .env
+          echo "BROADCAST_CONNECTION=null" >> .env
+
+      - name: Generate Application Cryptographic Key
+        run: |
+          cd ${{ env.WORKING_DIR }}
+          php artisan key:generate
+
+      - name: Run Complete Backend Test Suite & Verify 80% Min Coverage
+        run: |
+          cd ${{ env.WORKING_DIR }}
+          php -d zend_extension=xdebug.so -d xdebug.mode=coverage artisan test --coverage --min=80
+
+  # ---------------------------------------------------------------------------
+  # TASK 2: Frontend Client Testing Engine
+  # ---------------------------------------------------------------------------
+  frontend-test:
+    name: Frontend Vitest Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24 Runtime Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Node Packages
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Verify Code Linter Adherence
+        run: |
+          cd frontend
+          npm run lint --if-present
+
+      - name: Run Frontend Vitest Component Suites
+        run: |
+          cd frontend
+          npx vitest run
