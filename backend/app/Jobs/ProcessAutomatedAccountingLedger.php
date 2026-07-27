@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Models\DispatchTrip;
+use App\Models\Dispatch;
 use App\Services\Accounting\LedgerGenerator;
 use App\Support\Tenancy\TenantManager;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -89,7 +89,7 @@ class ProcessAutomatedAccountingLedger implements ShouldQueue, ShouldBeUnique
 
         try {
             DB::transaction(function () use ($ledgerGenerator): void {
-                $trip = DispatchTrip::query()
+                $trip = Dispatch::query()
                     ->whereKey($this->dispatchTripId)
                     ->lockForUpdate()
                     ->firstOrFail();
@@ -148,7 +148,7 @@ class ProcessAutomatedAccountingLedger implements ShouldQueue, ShouldBeUnique
             // VARCHAR(255) — truncating this is exactly the
             // "unmitigated backoff data truncation" failure mode this
             // hook exists to avoid.
-            DispatchTrip::query()
+            Dispatch::query()
                 ->whereKey($this->dispatchTripId)
                 ->update([
                     'ledger_status' => 'exception',

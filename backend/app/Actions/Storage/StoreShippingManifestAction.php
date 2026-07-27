@@ -60,6 +60,12 @@ class StoreShippingManifestAction
             ));
         }
 
+        $extension = $this->sanitizeExtension($file);
+
+        if (! in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true)) {
+            throw new RuntimeException(sprintf('Unsupported shipping manifest format: %s', $extension));
+        }
+
         $directory = $this->buildManifestDirectory($tenantId, $dispatchTripId);
         $filename = $this->buildManifestFilename($file);
 

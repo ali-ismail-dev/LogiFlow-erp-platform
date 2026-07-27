@@ -100,8 +100,12 @@ final class CarrierWebhookController extends Controller
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
-        $dispatch->refresh();
-        $dispatch->load(['stops' => fn($query) => $query->withoutTenancy()]);
+        // Reload without tenant scoping — the webhook route has no tenant
+        // middleware, so a plain ->refresh() or ->load() would trigger the
+        // TenantScope global scope and throw TenantContextNotResolvedException.
+        $dispatch = $dispatch->newQueryWithoutScopes()
+            ->with(['stops' => fn($query) => $query->withoutTenancy()])
+            ->findOrFail($dispatch->id);
 
         DispatchMovementUpdated::dispatch($dispatch);
 
@@ -145,8 +149,15 @@ final class CarrierWebhookController extends Controller
 
         $stop->update(['status' => $update->status->value]);
 
+        // Reload dispatch and stops without tenant scoping so that
+        // recomputeDispatchStatus can inspect every stop's status even
+        // when the webhook route has no tenant middleware.
+        $freshDispatch = $dispatch->newQueryWithoutScopes()
+            ->with(['stops' => fn($q) => $q->withoutTenancy()])
+            ->find($dispatch->id);
+
         $dispatch->update([
-            'status' => $this->recomputeDispatchStatus($dispatch->fresh(['stops']), $update->status)->value,
+            'status' => $this->recomputeDispatchStatus($freshDispatch, $update->status)->value,
         ]);
     }
 

@@ -44,6 +44,28 @@ class DispatchMovementUpdated implements ShouldBroadcastNow
     }
 
     /**
+     * Resolve a status value to its wire-safe string representation.
+     *
+     * The Dispatch model's accessor and the Stop model's cast may return
+     * BackedEnum instances.  Laravel's broadcast serialization does NOT
+     * automatically call ->value on enums, so we must normalise them
+     * explicitly here to guarantee a plain string on the wire (and keep
+     * the client-side TypeScript type simple).
+     */
+    private static function statusToString(mixed $status): ?string
+    {
+        if ($status === null) {
+            return null;
+        }
+
+        if ($status instanceof \BackedEnum) {
+            return (string) $status->value;
+        }
+
+        return (string) $status;
+    }
+
+    /**
      * The payload actually placed on the wire.
      *
      * Deliberately NOT `$this->dispatch->toArray()` and NOT
@@ -78,13 +100,13 @@ class DispatchMovementUpdated implements ShouldBroadcastNow
         return [
             'id' => $this->dispatch->id,
             'tenant_id' => $this->dispatch->tenant_id,
-            'status' => $this->dispatch->status,
+            'status' => self::statusToString($this->dispatch->status),
             'reference_number' => $this->dispatch->reference_number,
             'current_stop' => $stop ? [
                 'id' => $stop->id,
                 'sequence' => $stop->sequence,
                 'label' => $stop->label,
-                'status' => $stop->status,
+                'status' => self::statusToString($stop->status),
                 'eta' => optional($stop->eta)->toIso8601String(),
             ] : null,
             'driver' => $driver ? [

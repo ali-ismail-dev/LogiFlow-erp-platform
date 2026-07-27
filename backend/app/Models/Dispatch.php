@@ -24,6 +24,10 @@ class Dispatch extends Model
         'driver_name',
         'vehicle_identifier',
         'status',
+        'manifest_path',
+        'ledger_status',
+        'ledger_error',
+        'ledger_failed_at',
         'carrier_waybill_reference',
         'scheduled_at',
         'departed_at',
@@ -73,10 +77,14 @@ class Dispatch extends Model
 
     /**
      * Relational helper for active stop sequencing tracking metrics.
+     *
+     * Uses withoutTenancy() to remain safe in contexts where no tenant
+     * middleware is active (e.g. inbound carrier webhooks).
      */
     public function getCurrentStopAttribute(): ?Stop
     {
         return $this->stops()
+            ->withoutTenancy()
             ->whereNotIn('status', [\App\Enums\StopStatus::Completed, \App\Enums\StopStatus::Failed])
             ->orderBy('sequence', 'asc')
             ->first();
@@ -94,6 +102,3 @@ class Dispatch extends Model
         ];
     }
 }
-
-// FIX: Declare the structural class alias AFTER the class token loop closes completely
-class_alias(Dispatch::class, 'App\Models\DispatchTrip');

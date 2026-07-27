@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\Logistics\CarrierShipmentStatus;
 use App\Enums\StopStatus;
 use App\Traits\BelongsToTenant;
+use BackedEnum;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Enums\Logistics\CarrierShipmentStatus;
 
 class Stop extends Model
 {
@@ -21,6 +22,7 @@ class Stop extends Model
         'order_id',
         'sequence',
         'destination_address',
+        'label',
         'status',
         'eta',
         'arrived_at',
@@ -32,12 +34,39 @@ class Stop extends Model
     {
         return [
             'destination_address' => 'array',
-            'status' => CarrierShipmentStatus::class, // Bind the Phase 7 Carrier vocabulary casting map
             'sequence' => 'integer',
             'eta' => 'immutable_datetime',
             'arrived_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * Accessor: try StopStatus first, then CarrierShipmentStatus, then raw string.
+     */
+    public function getStatusAttribute(mixed $value): StopStatus|CarrierShipmentStatus|string|null
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if ($enum = StopStatus::tryFrom((string) $value)) {
+            return $enum;
+        }
+
+        if ($enum = CarrierShipmentStatus::tryFrom((string) $value)) {
+            return $enum;
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * Mutator: accept a BackedEnum instance or a string, normalise to string.
+     */
+    public function setStatusAttribute(mixed $value): void
+    {
+        $this->attributes['status'] = $value instanceof BackedEnum ? $value->value : (string) $value;
     }
 
     public function dispatch(): BelongsTo
