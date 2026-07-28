@@ -1,0 +1,7 @@
+.env
+.env.*
+.phpunit.cache/
+node_modules/
+backend/.env
+frontend/.env
+frontend/.env.local
