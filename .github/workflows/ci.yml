@@ -115,37 +115,36 @@ jobs:
         run: |
           cd frontend
           npx vitest
-
   # ---------------------------------------------------------------------------
   # TASK 3: Continuous Production Deployment Gateway (CD)
   # ---------------------------------------------------------------------------
-  deploy:
-    name: Production Server Deployment
-    needs: [backend-test, frontend-test] # Gated: Code MUST be verified green first
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+  # deploy:
+  #   name: Production Server Deployment
+  #   needs: [backend-test, frontend-test] # Gated: Code MUST be verified green first
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
 
-    steps:
-      - name: Execute Remote SSH Deployment Automation Actions
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PROD_SERVER_IP }}
-          username: ${{ secrets.PROD_SERVER_USER }}
-          key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
-          port: 22
-          script: |
-            cd /var/www/logiflow
-            git fetch --all
-            git reset --hard origin/main
+  #   steps:
+  #     - name: Execute Remote SSH Deployment Automation Actions
+  #       uses: appleboy/ssh-action@v1.0.3
+  #       with:
+  #         host: ${{ secrets.PROD_SERVER_IP }}
+  #         username: ${{ secrets.PROD_SERVER_USER }}
+  #         key: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+  #         port: 22
+  # script: |
+  #   cd /var/www/logiflow
+  #   git fetch --all
+  #   git reset --hard origin/main
 
-            # Recompile zero-downtime application layer microservices
-            docker compose -f docker/docker-compose.prod.yml up -d --build --remove-orphans
+  #   # Recompile zero-downtime application layer microservices
+  #   docker compose -f docker/docker-compose.prod.yml up -d --build --remove-orphans
 
-            # Execute database structural evolution layers safely inside the cluster container boundary
-            docker compose -f docker/docker-compose.prod.yml exec -T backend php artisan migrate --force
+  #   # Execute database structural evolution layers safely inside the cluster container boundary
+  #   docker compose -f docker/docker-compose.prod.yml exec -T backend php artisan migrate --force
 
-            # Wipe old framework memory layer variables to load clean updates
-            docker compose -f docker/docker-compose.prod.yml exec -T backend php artisan config:clear
-            docker compose -f docker/docker-compose.prod.yml exec -T backend php artisan route:clear
+  #   # Wipe old framework memory layer variables to load clean updates
+  #   docker compose -f docker/docker-compose.prod.yml exec -T backend php artisan config:clear
+  #   docker compose -f docker/docker-compose.prod.yml exec -T backend php artisan route:clear
 
-            echo "LogiFlow Deployment Engine Phase 9 executed successfully."
+  #   echo "LogiFlow Deployment Engine Phase 9 executed successfully."
