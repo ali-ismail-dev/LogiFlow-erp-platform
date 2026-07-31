@@ -30,6 +30,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use App\Enums\UserRole;
 
 class MultiTenantIsolationTest extends TestCase
 {
@@ -55,6 +56,7 @@ class MultiTenantIsolationTest extends TestCase
 
         $this->userA = User::factory()->create([
             'tenant_id' => $this->tenantA->id,
+            'role' => UserRole::SuperAdmin, // or whatever role is appropriate for the test
         ]);
     }
 

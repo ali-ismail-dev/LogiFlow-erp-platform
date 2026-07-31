@@ -4,26 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Dispatch\ListDispatchesAction; // ASSUMPTION — see note below
+use App\Actions\Dispatch\ListDispatchesAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\ListDispatchesRequest;
 use App\Http\Resources\DispatchResource;
+use App\Models\Dispatch;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 
-/**
- * NOTE ON THE ASSUMED DEPENDENCY: `ListDispatchesAction` stands in for
- * "the underlying Action/Repository class from Phase 2." This repo's
- * actual class/namespace almost certainly differs — swap the import and
- * the constructor type-hint for whatever Phase 2 really exposes. Nothing
- * else in this controller should need to change: the shape (validate,
- * delegate, return a Resource) is the contract, not the class name.
- *
- * Tenant scoping is NOT applied here. It is assumed Phase 2's action/
- * repository (or a global model scope beneath it) already scopes every
- * query to the tenant resolved by the `tenant` route middleware — a
- * fail-closed design means this controller should be structurally
- * *unable* to fetch another tenant's rows, not merely trusted not to.
- */
 final class DispatchController extends Controller
 {
     public function __construct(
@@ -32,7 +20,11 @@ final class DispatchController extends Controller
 
     public function index(ListDispatchesRequest $request): AnonymousResourceCollection
     {
-        $dispatches = ($this->listDispatches)($request->filters());
+        // 1. Structural Policy Boundary check — halts immediately if role rules reject execution
+        Gate::authorize('viewAny', Dispatch::class);
+
+        // 2. Delegate array parameters to your verified, tenant-scoped query filters action loop
+        $dispatches = ($this->listDispatches)($request->validated());
 
         return DispatchResource::collection($dispatches);
     }
