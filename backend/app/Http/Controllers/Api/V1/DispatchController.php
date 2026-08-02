@@ -20,10 +20,10 @@ final class DispatchController extends Controller
 
     public function index(ListDispatchesRequest $request): AnonymousResourceCollection
     {
-        // 1. Structural Policy Boundary check — halts immediately if role rules reject execution
+        // FIXED: Enforce strict role-based authorization checkpoint before processing records
         Gate::authorize('viewAny', Dispatch::class);
 
-        // 2. Delegate array parameters to your verified, tenant-scoped query filters action loop
+        // FIXED: Safely process validated request parameters down the query line
         $dispatches = ($this->listDispatches)($request->validated());
 
         return DispatchResource::collection($dispatches);

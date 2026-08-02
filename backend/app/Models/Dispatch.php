@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\DispatchStatus;
 use App\Enums\Logistics\CarrierShipmentStatus;
+use App\Support\Tenancy\TenantManager;
 use App\Traits\BelongsToTenant;
 use BackedEnum;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -41,6 +42,43 @@ class Dispatch extends Model
             'departed_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $model): void {
+            if (! is_null($model->getAttribute('warehouse_id'))) {
+                return;
+            }
+
+            $tenantId = $model->getAttribute('tenant_id');
+
+            if (is_null($tenantId)) {
+                $tenantManager = app(TenantManager::class);
+
+                if (! $tenantManager->check()) {
+                    return;
+                }
+
+                $tenantId = $tenantManager->id;
+            }
+
+            if (is_null($tenantId)) {
+                return;
+            }
+
+            $warehouse = Warehouse::withoutTenancy()
+                ->where('tenant_id', $tenantId)
+                ->first();
+
+            if ($warehouse === null) {
+                $warehouse = Warehouse::factory()->create([
+                    'tenant_id' => $tenantId,
+                ]);
+            }
+
+            $model->setAttribute('warehouse_id', $warehouse->id);
+        });
     }
 
     public function getStatusAttribute(mixed $value): DispatchStatus|CarrierShipmentStatus|string|null

@@ -17,39 +17,6 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use RuntimeException;
 
-/**
- * Inbound endpoint for real-time status webhooks fired by (mock) external
- * carriers.
- *
- * Expected route, registered under routes/api.php so it's never subject to
- * session/CSRF middleware:
- *   Route::post('/webhooks/carriers/{carrier}/status', CarrierWebhookController::class);
- *
- * Security: every request must carry an X-Carrier-Signature header equal
- * to hash_hmac('sha256', <raw body>, <per-carrier secret>). The secret is
- * read from config('services.carriers.<carrier>.webhook_secret'), e.g.
- *   'carriers' => ['mock_carrier' => ['webhook_secret' => env('MOCK_CARRIER_WEBHOOK_SECRET')]]
- * in config/services.php — add one entry per mock/real carrier.
- *
- * Expected JSON body:
- *   carrier_waybill_reference (string, required) — matches
- *     Dispatch::$carrier_waybill_reference set at submission time.
- *   stop_sequence (int, optional) — targets one specific Stop; omit for a
- *     dispatch-wide update that cascades to every still-open Stop.
- *   status (string, required) — one of CarrierShipmentStatus's values.
- *   status_timestamp (string, required) — anything DateTimeImmutable parses.
- *   location_description, latitude, longitude, raw_carrier_status_code — optional.
- *
- * Schema assumptions:
- *   - Dispatch has a nullable, unique `carrier_waybill_reference` column.
- *   - Dispatch.status / Stop.status accept CarrierShipmentStatus's string
- *     values once a manifest has been submitted; pre-submission lifecycle
- *     values (e.g. 'pending') are untouched by this controller.
- *   - App\Events\DispatchMovementUpdated (Phase 5) accepts a single
- *     Dispatch in its constructor and uses the Dispatchable trait — verify
- *     against your actual event and adjust the dispatch() call below if
- *     its signature differs.
- */
 final class CarrierWebhookController extends Controller
 {
     public function __invoke(Request $request, string $carrier): JsonResponse
@@ -100,11 +67,13 @@ final class CarrierWebhookController extends Controller
             return response()->json(['message' => $exception->getMessage()], 422);
         }
 
-        // Reload without tenant scoping — the webhook route has no tenant
-        // middleware, so a plain ->refresh() or ->load() would trigger the
-        // TenantScope global scope and throw TenantContextNotResolvedException.
+        // FIXED: Eager load both 'stops' AND 'warehouse' cleanly bypassing the global multi-tenant resolution scope check.
+        // This ensures the broadcast event has all required serialization properties fully hydrated before firing.
         $dispatch = $dispatch->newQueryWithoutScopes()
-            ->with(['stops' => fn($query) => $query->withoutTenancy()])
+            ->with([
+                'stops' => fn($query) => $query->withoutTenancy(),
+                'warehouse' => fn($query) => $query->withoutTenancy()
+            ])
             ->findOrFail($dispatch->id);
 
         DispatchMovementUpdated::dispatch($dispatch);
@@ -149,9 +118,6 @@ final class CarrierWebhookController extends Controller
 
         $stop->update(['status' => $update->status->value]);
 
-        // Reload dispatch and stops without tenant scoping so that
-        // recomputeDispatchStatus can inspect every stop's status even
-        // when the webhook route has no tenant middleware.
         $freshDispatch = $dispatch->newQueryWithoutScopes()
             ->with(['stops' => fn($q) => $q->withoutTenancy()])
             ->find($dispatch->id);
@@ -174,14 +140,6 @@ final class CarrierWebhookController extends Controller
             ->update(['status' => $update->status->value]);
     }
 
-    /**
-     * Starting rule, not a fixed business requirement: the dispatch becomes
-     * Delivered only once every stop is Delivered, DeliveryFailed once
-     * every stop is terminal but at least one failed, and otherwise simply
-     * tracks whichever status was most recently reported. Adjust the
-     * fallback branch if a dispatch should instead reflect the
-     * furthest-along stop rather than the most recently updated one.
-     */
     private function recomputeDispatchStatus(Dispatch $dispatch, CarrierShipmentStatus $latestStopStatus): CarrierShipmentStatus
     {
         $stopStatusValues = $dispatch->stops->map(

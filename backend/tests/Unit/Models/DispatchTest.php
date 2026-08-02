@@ -101,6 +101,23 @@ class DispatchTest extends TestCase
     }
 
     #[Test]
+    public function it_assigns_a_default_warehouse_when_creating_without_one(): void
+    {
+        $tenant = Tenant::factory()->create();
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $tenant->id]);
+
+        $this->tenantManager->setTenantId($tenant->id);
+
+        $dispatch = Dispatch::create([
+            'reference_code' => 'DSP-DEFAULT-WH',
+            'status' => DispatchStatus::Planned->value,
+        ]);
+
+        $this->assertSame($tenant->id, $dispatch->tenant_id);
+        $this->assertSame($warehouse->id, $dispatch->warehouse_id);
+    }
+
+    #[Test]
     public function it_defines_warehouse_relationship(): void
     {
         $dispatch = Dispatch::factory()->create();

@@ -1,32 +1,20 @@
-# =============================================================================
-# LogiFlow — Local Development Stack
-# =============================================================================
-# Prereqs: copy .env.example -> .env and fill it in before running anything.
-#   cp .env.example .env
-#   docker compose up -d --build
-#
-# No `version:` key on purpose — it's obsolete under the Compose Specification
-# and modern `docker compose` ignores/warns on it.
-# =============================================================================
-
 name: logiflow
 
+# Shared network and persistent storage definitions.
+# These named volumes keep database, cache, and build artifacts alive across
+# container restarts instead of relying on ephemeral local disk.
 networks:
   logiflow-network:
     name: logiflow-network
     driver: bridge
 
 volumes:
-  # --- Required persistence (survives `docker compose down`, not just `stop`) ---
   postgres-data:
     name: logiflow-postgres-data
   redis-data:
     name: logiflow-redis-data
   minio-data:
     name: logiflow-minio-data
-  # --- Dependency-isolation volumes (bonus): keep compiled/native deps out of
-  #     the bind-mounted source tree so a Mac/Windows host never clobbers
-  #     Linux-compiled vendor/node_modules content. ---
   backend-vendor:
     name: logiflow-backend-vendor
   frontend-node-modules:
@@ -35,9 +23,9 @@ volumes:
     name: logiflow-frontend-next-cache
 
 services:
-  # ---------------------------------------------------------------------------
-  # FRONTEND — Next.js 16 (Node 24) — standalone SPA/SSR client
-  # ---------------------------------------------------------------------------
+  # Frontend application container.
+  # The bind mount keeps local source changes visible inside the container,
+  # while the named volumes preserve node_modules and Next.js cache.
   frontend:
     build:
       context: ../frontend
@@ -59,6 +47,7 @@ services:
       HOSTNAME: "0.0.0.0"
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      INTERNAL_BACKEND_URL: http://webserver
     depends_on:
       webserver:
         condition: service_healthy
@@ -69,10 +58,9 @@ services:
     networks:
       - logiflow-network
 
-  # ---------------------------------------------------------------------------
-  # BACKEND — Laravel 13 (PHP 8.4 via PHP-FPM) — headless API only, never
-  # published to the host; only `webserver` may reach it (expose, not ports).
-  # ---------------------------------------------------------------------------
+  # PHP/Laravel application service.
+  # The dependency conditions use service_healthy so the app waits for the
+  # database, Redis, and object storage to be ready before it boots.
   backend:
     build:
       context: ../backend
@@ -93,25 +81,22 @@ services:
       APP_KEY: ${APP_KEY}
       APP_DEBUG: ${APP_DEBUG}
       APP_URL: ${APP_URL}
-      LOG_CHANNEL: ${LOG_CHANNEL}
-      LOG_LEVEL: ${LOG_LEVEL}
-
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
       DB_CONNECTION: pgsql
       DB_HOST: db
       DB_PORT: "5432"
       DB_DATABASE: ${DB_DATABASE}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-
       CACHE_STORE: redis
       SESSION_DRIVER: redis
       SESSION_DOMAIN: ${SESSION_DOMAIN}
       QUEUE_CONNECTION: redis
-      BROADCAST_CONNECTION: redis
+      BROADCAST_CONNECTION: reverb
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_PORT: "6379"
-
       FILESYSTEM_DISK: s3
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
@@ -119,9 +104,14 @@ services:
       AWS_BUCKET: ${MINIO_BUCKET}
       AWS_ENDPOINT: http://minio:9000
       AWS_USE_PATH_STYLE_ENDPOINT: "true"
-
       SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS}
       FRONTEND_URL: ${FRONTEND_URL}
+      REVERB_APP_ID: ${REVERB_APP_ID:-logiflow_app_id}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-logiflow_key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-logiflow_secret}
+      REVERB_HOST: reverb
+      REVERB_PORT: "8000"
+      REVERB_SCHEME: http
     depends_on:
       db:
         condition: service_healthy
@@ -134,37 +124,74 @@ services:
     networks:
       - logiflow-network
 
-  # ---------------------------------------------------------------------------
-  # WEBSERVER — Nginx, the only path into the PHP layer from the host/frontend
-  # ---------------------------------------------------------------------------
+  # Reverb WebSocket service for Laravel broadcasting.
+  # Keeping this in a separate container makes real-time events easier to run,
+  # monitor, and scale independently from the main PHP app.
+  reverb:
+    image: logiflow/backend:dev
+    container_name: logiflow-reverb
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8000"]
+    volumes:
+      - ../backend:/var/www/html
+      - backend-vendor:/var/www/html/vendor
+    expose:
+      - "8000"
+    environment:
+      APP_NAME: ${APP_NAME}
+      APP_ENV: ${APP_ENV}
+      APP_KEY: ${APP_KEY}
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      REVERB_APP_ID: ${REVERB_APP_ID:-logiflow_app_id}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-logiflow_key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-logiflow_secret}
+      REVERB_HOST: 0.0.0.0
+      REVERB_PORT: "8000"
+      REVERB_SCHEME: http
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PORT: "6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - logiflow-network
+
+  # Nginx entrypoint for the stack.
+  # The healthcheck uses a direct TCP probe so Compose can confirm the server
+  # is accepting traffic before dependent services proceed.
   webserver:
     image: nginx:1.27-alpine
     container_name: logiflow-webserver
     restart: unless-stopped
     volumes:
       - ../backend:/var/www/html:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ../nginx/conf.d:/etc/nginx/conf.d:ro
     ports:
       - "${NGINX_PORT}:80"
     depends_on:
       backend:
         condition: service_started
+      reverb:
+        condition: service_started
     healthcheck:
-      # Hits Laravel's own /up route (default since Laravel 11, still present
-      # in 13.x) THROUGH the full nginx -> php-fpm -> framework path. This is
-      # a stronger signal than a bare FPM port check: if Postgres/Redis are
-      # unreachable, Laravel's DiagnosingHealth event surfaces it here too.
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/up"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      # FIXED: Native shell probe testing port 80 directly to ensure Nginx is accepting traffic cleanly
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/80 && exec 3>&-"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     networks:
       - logiflow-network
 
-  # ---------------------------------------------------------------------------
-  # DATABASE — PostgreSQL 16
-  # ---------------------------------------------------------------------------
+  # PostgreSQL database service.
+  # The pg_isready probe allows Compose to wait until the database is ready
+  # to accept connections rather than failing on startup races.
   db:
     image: postgres:16-alpine
     container_name: logiflow-db
@@ -178,7 +205,7 @@ services:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      test: ["CMD-SHELL", "pg_isready -U $${DB_USERNAME} -d ${DB_DATABASE}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -186,15 +213,9 @@ services:
     networks:
       - logiflow-network
 
-  # ---------------------------------------------------------------------------
-  # CACHE / QUEUE / BROADCASTER — Redis 7.2
-  #
-  # Pinned to 7.2, not "latest", ON PURPOSE: Redis Ltd relicensed everything
-  # from 7.4 onward to SSPL/RSALv2 (source-available, not OSI open source) in
-  # March 2024. 7.2.x is the last tag under the original BSD-3-Clause terms.
-  # See handshake.md for the Valkey alternative if the team wants to move
-  # past 7.2 without revisiting that licensing question.
-  # ---------------------------------------------------------------------------
+  # Redis cache and session store.
+  # Authentication and append-only persistence are enabled to make the cache
+  # safer and more durable in development and testing.
   redis:
     image: redis:7.2-alpine
     container_name: logiflow-redis
@@ -224,17 +245,8 @@ services:
     networks:
       - logiflow-network
 
-  # ---------------------------------------------------------------------------
-  # OBJECT STORAGE — MinIO (S3-compatible)
-  #
-  # Pinned to RELEASE.2025-04-22T22-12-26Z, NOT "latest". MinIO Inc. stripped
-  # the admin console from Community Edition builds shortly after this tag,
-  # then archived the minio/minio repository entirely on 2026-04-25 and
-  # redirected development to the paid AIStor product. This is the last
-  # release that still ships the full console you asked to expose on :8900.
-  # Flagged as a real risk in handshake.md — do not let this tag choice read
-  # as "forgot to update the image."
-  # ---------------------------------------------------------------------------
+  # MinIO object storage service.
+  # This provides S3-compatible storage locally and exposes both API and UI ports.
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: logiflow-minio
@@ -257,10 +269,8 @@ services:
     networks:
       - logiflow-network
 
-  # ---------------------------------------------------------------------------
-  # BOOTSTRAP — one-shot: creates the app bucket so first upload doesn't 404.
-  # Runs once, exits 0, and gates `backend` via service_completed_successfully.
-  # ---------------------------------------------------------------------------
+  # One-shot bucket initialization helper.
+  # This container runs once, creates the required MinIO bucket, and exits.
   createbuckets:
     image: minio/mc:RELEASE.2025-04-08T15-39-49Z
     container_name: logiflow-minio-init

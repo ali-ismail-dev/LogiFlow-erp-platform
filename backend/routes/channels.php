@@ -7,32 +7,22 @@ use Illuminate\Support\Facades\Broadcast;
 
 /*
 |--------------------------------------------------------------------------
-| Broadcast Channels
+| Broadcast Channels — Isolated Telemetry Operations Perimeters
 |--------------------------------------------------------------------------
 |
-| Tenant isolation is strictly enforced at the perimeter. This channel acts
-| as an ironclad firewall preventing cross-tenant telemetry leakage.
+| Enforces an absolute, ironclad database row firewall directly at our 
+| asynchronous socket transmission boundary.
 |
 */
 
-$broadcastingConnections = config('broadcasting.connections', []);
-$shouldRegisterBroadcastChannels = ! app()->runningInConsole()
-    && is_array($broadcastingConnections)
-    && count($broadcastingConnections) > 0;
+// FIXED: Channel definition registers universally across all environments and Reverb daemons
+Broadcast::channel('tenant.{tenantId}.ops', function (User $user, string $tenantId): bool {
+    // SECURITY GUARD A: Instantly block malicious or missing structural data context
+    if (is_null($user->tenant_id)) {
+        return false;
+    }
 
-if ($shouldRegisterBroadcastChannels) {
-    Broadcast::channel('tenant.{tenantId}.ops', function (User $user, string $tenantId): bool {
-        // SECURITY GUARD A: Instantly block malicious SQL/Regex parameter strings
-        if (! ctype_digit($tenantId)) {
-            return false;
-        }
-
-        // SECURITY GUARD B: Deny un-onboarded platform or ambient accounts completely
-        if (is_null($user->tenant_id)) {
-            return false;
-        }
-
-        // SECURITY GUARD C: Strict integer type-alignment validation check
-        return (int) $user->tenant_id === (int) $tenantId;
-    });
-}
+    // SECURITY GUARD B: Deny un-onboarded platform accounts completely via strict string match
+    // Compares the user's tenant ID against the requested channel route parameter fragment
+    return (string) $user->tenant_id === trim($tenantId);
+});
