@@ -1,4 +1,3 @@
-// frontend/src/app/[tenant]/dispatches/new/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -15,7 +14,8 @@ interface DispatchCreateResponse {
 }
 
 export default function NewDispatchPage() {
-  const { tenant } = useParams<{ tenant: string }>();
+  const params = useParams();
+  const tenant = (params?.tenant as string) || "unknown";
   const router = useRouter();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,7 +31,8 @@ export default function NewDispatchPage() {
     setErrorMessage(null);
 
     try {
-      const client = createApiClient(tenant);
+      // FIXED: Initializes the client factory cleanly without passing positional configuration context strings
+      const client = createApiClient();
       const response = await client.post<DispatchCreateResponse>("/dispatches", payload);
 
       if (response.status === 201) {

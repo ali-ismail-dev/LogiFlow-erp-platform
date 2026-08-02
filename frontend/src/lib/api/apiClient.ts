@@ -125,6 +125,7 @@ export class ApiClient {
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,
+        credentials: "include", // FIXED: Forces browser fetch layers to attach Sanctum session cookies natively
       });
 
       const responseData: T = response.status !== 204 ? await response.json() : (undefined as T);
@@ -164,4 +165,3 @@ export class ApiClient {
 export function createApiClient(config?: ApiClientConfig): ApiClient {
   return new ApiClient(config);
 }
-

@@ -8,11 +8,15 @@
 /**
  * Lifecycle states for a Dispatch, mirrored 1:1 from the backend's
  * `DispatchStatus` PHP enum (App\Enums\DispatchStatus).
+ *
+ * NOTE: The backend does NOT have "pending" or "delayed" statuses.
+ *       "planned" is the initial state. "in_transit", "completed",
+ *       and "cancelled" are the other states. The Operations Cockpit
+ *       dashboard logic accounts for this via string comparisons.
  */
 export enum DispatchStatus {
-  PENDING = "pending",
+  PLANNED = "planned",
   IN_TRANSIT = "in_transit",
-  DELAYED = "delayed",
   COMPLETED = "completed",
   CANCELLED = "cancelled",
 }
@@ -27,16 +31,6 @@ export enum StopStatus {
   ARRIVED = "arrived",
   COMPLETED = "completed",
   FAILED = "failed",
-}
-
-/** Originating warehouse / distribution node for a Dispatch. */
-export interface Warehouse {
-  id: string;
-  name: string;
-  code: string;
-  timezone: string;
-  latitude: number;
-  longitude: number;
 }
 
 /**
@@ -55,14 +49,30 @@ export interface DestinationAddress {
   longitude?: number | null;
 }
 
-/** Order payload nested inside a Stop. */
+/** Originating warehouse / distribution node for a Dispatch. */
+export interface Warehouse {
+  id: string;
+  name: string;
+  code: string;
+  timezone: string;
+  /** Full address string/object as returned by WarehouseResource */
+  address: string | Record<string, unknown>;
+}
+
+/**
+ * Order payload nested inside a Stop.
+ * Mirrors App\Http\Resources\OrderResource exactly.
+ */
 export interface Order {
   id: string;
   order_number: string;
   customer_name: string;
-  item_count: number;
-  weight_kg: number;
-  requires_signature: boolean;
+  /** Full shipping address (object or string) as stored in the DB */
+  shipping_address: string | Record<string, unknown>;
+  /** Order lifecycle status string */
+  status: string;
+  /** Total weight in kilograms */
+  total_weight_kg: number;
 }
 
 /** A single stop within a Dispatch's sequenced route. */
@@ -72,11 +82,17 @@ export interface Stop {
   status: StopStatus;
   /** ISO 8601 timestamp, e.g. "2026-07-22T18:30:00Z" */
   eta: string;
-  destination_address: DestinationAddress;
+  /** ISO 8601 timestamp, nullable */
+  arrived_at: string | null;
+  /** ISO 8601 timestamp, nullable */
+  completed_at: string | null;
+  /** Optional failure reason string */
+  failure_reason: string | null;
+  destination_address: DestinationAddress | string | Record<string, unknown>;
   order: Order;
 }
 
-/** Top-level Dispatch entity as returned by `GET /api/dispatches`. */
+/** Top-level Dispatch entity as returned by `GET /api/v1/dispatches`. */
 export interface Dispatch {
   id: string;
   reference_code: string;
@@ -85,6 +101,10 @@ export interface Dispatch {
   vehicle_identifier: string;
   /** ISO 8601 timestamp, or null if the dispatch hasn't departed yet. */
   departed_at: string | null;
+  /** ISO 8601 timestamp, or null if not yet scheduled */
+  scheduled_at: string | null;
+  /** ISO 8601 timestamp, or null if not yet completed */
+  completed_at: string | null;
   warehouse: Warehouse;
   stops: Stop[];
 }

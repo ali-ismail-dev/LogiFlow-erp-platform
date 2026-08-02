@@ -1,28 +1,26 @@
 # syntax=docker/dockerfile:1
-#
-# Multi-stage build: docker-compose.yml builds the `development` target.
-# `builder`/`production` are kept in the same file for production parity —
-# same base image, same lockfile install, only the final stage differs.
 
 ARG NODE_VERSION=24.18.0
 
 FROM node:${NODE_VERSION}-alpine AS base
 WORKDIR /app
-# Needed by several native Next.js/Node dependencies on musl (Alpine) libc
 RUN apk add --no-cache libc6-compat
 
 # -----------------------------------------------------------------------------
-# deps — installed once from the lockfile, reused by dev and build stages
+# deps — Hardened with atomic network timeout retries to survive connection drops
 # -----------------------------------------------------------------------------
 FROM base AS deps
 COPY package.json package-lock.json* ./
-RUN npm ci
+
+# FIXED: Configure npm to aggressively retry sockets and avoid parallel download throttling
+RUN npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retries 10 && \
+    npm config set maxsockets 3 && \
+    npm ci --network-timeout=300000 --prefer-offline
 
 # -----------------------------------------------------------------------------
-# development — this is the target docker-compose.yml builds. Source is
-# bind-mounted at runtime; node_modules/.next live in named volumes (see
-# compose file) so the container's Linux-compiled modules never collide with
-# a host's macOS/Windows node_modules.
+# development
 # -----------------------------------------------------------------------------
 FROM base AS development
 ENV NODE_ENV=development
@@ -31,8 +29,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
 # -----------------------------------------------------------------------------
-# builder — production build. Requires `output: 'standalone'` in
-# next.config.js/ts so `.next/standalone` exists for the production stage.
+# builder — production build
 # -----------------------------------------------------------------------------
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
@@ -41,8 +38,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # -----------------------------------------------------------------------------
-# production — minimal runtime: only the standalone server + static assets,
-# running as an unprivileged user.
+# production — minimal runtime
 # -----------------------------------------------------------------------------
 FROM base AS production
 ENV NODE_ENV=production

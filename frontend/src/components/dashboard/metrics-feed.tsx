@@ -20,35 +20,14 @@ const METRIC_DEFINITIONS: MetricDefinition[] = [
   { key: "active_drivers", label: "Active Drivers", accent: "text-sky-400" },
 ];
 
-/**
- * Client Component: the interval below is the only reason this leaves the RSC
- * tree. In production it becomes a WebSocket subscription against the
- * tenant's telemetry channel instead of a poll.
- */
 export function MetricsFeed({ initialMetrics }: MetricsFeedProps) {
   const [metrics, setMetrics] = useState(initialMetrics);
   const [justUpdated, setJustUpdated] = useState<keyof OperationalMetrics | null>(null);
 
+  // Sync state cleanly whenever server props or parents update via socket telemetry
   useEffect(() => {
-    const interval = setInterval(() => {
-      const roll = Math.random();
-      if (roll > 0.65) {
-        setJustUpdated("live_delays");
-        setMetrics((prev) => ({
-          ...prev,
-          live_delays: Math.min(9, Math.max(0, prev.live_delays + (Math.random() > 0.5 ? 1 : -1))),
-        }));
-      } else if (roll > 0.35) {
-        setJustUpdated("pending_stops");
-        setMetrics((prev) => ({
-          ...prev,
-          pending_stops: Math.min(9, Math.max(0, prev.pending_stops + (Math.random() > 0.5 ? 1 : -1))),
-        }));
-      }
-    }, 6000);
-
-    return () => clearInterval(interval);
-  }, []);
+    setMetrics(initialMetrics);
+  }, [initialMetrics]);
 
   useEffect(() => {
     if (!justUpdated) return;

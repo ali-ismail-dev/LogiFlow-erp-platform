@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { Dispatch, LedgerLogEntry } from "@/types/logistics";
-import { DispatchStatus } from "@/types/logistics";
 
 interface MonitoringSidebarProps {
-  dispatches: Dispatch[];
-  initialLedgerEntries: LedgerLogEntry[];
+  dispatches?: Dispatch[];      // Made optional to absorb loose initial properties
+  initialEntries: LedgerLogEntry[]; // FIXED: Aligned properties name with File 1's call invocation
 }
 
 const SIMULATED_LOG_MESSAGES = [
@@ -16,11 +15,18 @@ const SIMULATED_LOG_MESSAGES = [
   "Fuel surcharge ledger updated",
 ];
 
-export function MonitoringSidebar({ dispatches, initialLedgerEntries }: MonitoringSidebarProps) {
-  const [ledgerEntries, setLedgerEntries] = useState(initialLedgerEntries);
-  const activeDrivers = dispatches.filter(
-    (d) => d.status === DispatchStatus.IN_TRANSIT || d.status === DispatchStatus.DELAYED
-  );
+export function MonitoringSidebar({ dispatches = [], initialEntries }: MonitoringSidebarProps) {
+  const [ledgerEntries, setLedgerEntries] = useState(initialEntries);
+
+  // FIXED: Defensive string parsing catches both internal statuses and real-time carrier status updates
+  const activeDrivers = dispatches.filter((d) => {
+    const s = String(d.status).toLowerCase();
+    return s === "in_transit" || s === "delayed" || s === "picked_up" || s === "out_for_delivery";
+  });
+
+  useEffect(() => {
+    setLedgerEntries(initialEntries);
+  }, [initialEntries]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -49,15 +55,15 @@ export function MonitoringSidebar({ dispatches, initialLedgerEntries }: Monitori
             </p>
           )}
           {activeDrivers.map((dispatch) => {
-            const isDelayed = dispatch.status === DispatchStatus.DELAYED;
+            const isDelayed = String(dispatch.status).toLowerCase() === "delayed";
             return (
               <div
                 key={dispatch.id}
                 className="flex items-center justify-between rounded-lg border border-zinc-800/60 bg-zinc-900/50 p-3"
               >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-zinc-200">{dispatch.driver_name}</p>
-                  <p className="font-mono text-[11px] text-zinc-500">{dispatch.vehicle_identifier}</p>
+                <div className="min-w-0 flex-1 pr-2">
+                  <p className="truncate text-sm font-medium text-zinc-200">{dispatch.driver_name ?? "Unassigned Driver"}</p>
+                  <p className="font-mono text-[11px] text-zinc-500">{dispatch.vehicle_identifier ?? "N/A"}</p>
                 </div>
                 <span className="relative flex h-2 w-2 flex-none">
                   <span

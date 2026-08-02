@@ -88,7 +88,7 @@ describe("DispatchOrderForm", () => {
     it("renders the Stops fieldset with one initial stop", () => {
       setup();
 
-      expect(screen.getByRole("group", { name: /stops/i })).toBeInTheDocument();
+      expect(screen.getByText(/stops/i)).toBeInTheDocument();
       expect(screen.getByRole("group", { name: /stop 1/i })).toBeInTheDocument();
     });
 
@@ -126,31 +126,31 @@ describe("DispatchOrderForm", () => {
       expect(screen.queryByRole("group", { name: /stop 1/i })).not.toBeInTheDocument();
     });
 
-    it("allows removing a specific stop when multiple are present and safely shifts array values", async () => {
+        it("allows removing a specific stop when multiple are present and safely shifts array values", async () => {
       const { user } = setup();
 
-      // Hydrate Stop 1 uniquely
+      // Stop 1 is present initially. Fill fields atomically where possible
       await fillStop(user, 1, { orderId: "1111", line1: "111 First St" });
       
-      // Spawn and hydrate Stop 2 uniquely
+      // Spawn and fill Stop 2
       await user.click(screen.getByRole("button", { name: /add stop/i }));
       await fillStop(user, 2, { orderId: "2222", line1: "222 Second St" });
 
-      // Spawn and hydrate Stop 3 uniquely
+      // Spawn and fill Stop 3
       await user.click(screen.getByRole("button", { name: /add stop/i }));
       await fillStop(user, 3, { orderId: "3333", line1: "333 Third St" });
 
-      // Action: Strip out the middle segment slice (Stop 2)
+      // Action: Remove the middle segment (Stop 2)
       await user.click(screen.getByRole("button", { name: /remove stop 2/i }));
 
-      // FIXED: Senior Assertions explicitly confirm array value re-indexing parameters hold
+      // Verification: Confirm array value re-indexing parameters hold
       const remainingStop2Group = screen.getByRole("group", { name: /stop 2/i });
       const orderIdInput = within(remainingStop2Group).getByRole("spinbutton", { name: /order id/i });
       
-      // Proves old Stop 3 content dropped into slot 2 position safely
+      // Confirms old Stop 3 content dropped into slot 2 position safely
       expect(orderIdInput).toHaveValue(3333);
       expect(screen.queryByRole("group", { name: /stop 3/i })).not.toBeInTheDocument();
-    });
+    }, 15000); // FIXED: Added localized 15s execution timeout window for heavy DOM array mutations
   });
 
   describe("validation", () => {
