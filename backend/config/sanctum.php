@@ -15,10 +15,19 @@ return [
     | Sanctum's EnsureFrontendRequestsAreStateful::fromFrontend() source.
     | Value comes entirely from .env; see SANCTUM_STATEFUL_DOMAINS.
     */
-    'stateful' => explode(',', (string) env(
-        'SANCTUM_STATEFUL_DOMAINS',
-        'localhost,localhost:3000,127.0.0.1,127.0.0.1:3000,' . Sanctum::currentApplicationUrlWithPort()
-    )),
+    'stateful' => array_values(array_unique(array_filter(array_merge(
+        // Explicit env-provided stateful domains (highest priority).
+        explode(',', (string) env('SANCTUM_STATEFUL_DOMAINS', '')),
+        // Default local-development hosts.
+        ['localhost', '127.0.0.1', 'localhost:3000', '127.0.0.1:3000'],
+        // Full local tenant-subdomain wildcard coverage for the Next.js dev
+        // port range (3000–3005) — required so requests from
+        // `nike.localhost:3001` are treated as stateful SPA traffic and get
+        // the session + CSRF middleware applied.
+        ['*.localhost:3000', '*.localhost:3001', '*.localhost:3002', '*.localhost:3003', '*.localhost:3004', '*.localhost:3005'],
+        // The URL Laravel believes it is served on (usually http://localhost:8000).
+        [Sanctum::currentApplicationUrlWithPort()],
+    )))),
 
     /*
     |--------------------------------------------------------------------------
@@ -52,7 +61,13 @@ return [
     | invalidation the moment a user's password changes elsewhere.
     */
     'middleware' => [
-        'authenticate_session' => Laravel\Sanctum\Http\Middleware\AuthenticateSession::class,
+        // NOTE: `authenticate_session` is intentionally omitted. It runs inside
+        // Sanctum's global EnsureFrontendRequestsAreStateful pipeline, which
+        // executes BEFORE the route-level `tenant` middleware. It would call
+        // `$request->user()` (triggering a User query) before the tenant context
+        // is resolved, throwing a 500 "Tenant context not resolved" error on
+        // every authenticated route. The `auth:sanctum` guard still
+        // authenticates from the session correctly after the tenant resolves.
         'encrypt_cookies' => Illuminate\Cookie\Middleware\EncryptCookies::class,
         'validate_csrf_token' => Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
     ],

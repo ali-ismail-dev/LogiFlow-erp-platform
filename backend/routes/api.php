@@ -17,7 +17,7 @@ Route::post('/v1/webhooks/carrier/{carrier}', CarrierWebhookController::class)
     ->name('api.v1.webhooks.carrier');
 
 // Public Tenant-Scoped Endpoint: Login must run before session tokens exist
-Route::middleware(['tenant'])
+Route::middleware(['web', 'tenant'])
     ->prefix('v1')
     ->group(function (): void {
         Route::post('/auth/login', [AuthController::class, 'login'])->name('api.v1.auth.login');

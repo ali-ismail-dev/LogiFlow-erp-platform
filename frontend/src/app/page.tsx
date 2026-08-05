@@ -17,7 +17,7 @@ export default function RootLandingPage() {
       return;
     }
     setValidationError(null);
-    router.push(`/${slug}/dashboard`);
+    router.push(`/${slug}/login`);
   }
 
   return (

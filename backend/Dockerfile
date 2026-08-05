@@ -52,6 +52,13 @@ WORKDIR /var/www/html
 # -----------------------------------------------------------------------------
 FROM base AS development
 
+# Xdebug — dev-only coverage/debug tool. Installed but NOT auto-enabled so
+# normal requests stay fast; load it on demand with:
+#   docker compose exec backend php -d zend_extension=/usr/local/lib/php/extensions/no-debug-non-zts-20240924/xdebug.so -d xdebug.mode=coverage artisan test --coverage --min=80
+# (the extension directory is container-specific; use `php -i | grep extension_dir`
+# or `find / -name xdebug.so` to locate the exact path on a different PHP version)
+RUN pecl install xdebug
+
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

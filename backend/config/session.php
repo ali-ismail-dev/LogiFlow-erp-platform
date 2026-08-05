@@ -129,7 +129,7 @@ return [
 
     'cookie' => env(
         'SESSION_COOKIE',
-        Str::slug((string) env('APP_NAME', 'laravel')).'-session'
+        Str::slug((string) env('APP_NAME', 'laravel')) . '-session'
     ),
 
     /*
@@ -156,7 +156,25 @@ return [
     |
     */
 
-    'domain' => env('SESSION_DOMAIN'),
+    'domain' => (function () {
+        $domain = env('SESSION_DOMAIN');
+
+        // Browsers reject cookies whose Domain attribute is a public suffix.
+        // "localhost" (and ".localhost") is on the Public Suffix List, so
+        // `Domain=.localhost` cookies are silently dropped by Chrome/curl —
+        // which breaks the Sanctum XSRF/session handshake (419 CSRF mismatch
+        // because neither the XSRF-TOKEN nor the session cookie is stored).
+        //
+        // Fall back to a HOST-ONLY cookie (no Domain attribute), which is
+        // still shared across ports on the same tenant subdomain
+        // (e.g. nike.localhost:3001 <-> nike.localhost:8000), since cookies
+        // are not port-scoped.
+        if ($domain === null || $domain === '' || $domain === 'localhost' || $domain === '.localhost') {
+            return null;
+        }
+
+        return $domain;
+    })(),
 
     /*
     |--------------------------------------------------------------------------

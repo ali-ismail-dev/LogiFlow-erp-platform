@@ -69,6 +69,26 @@ export interface ApiResponse<T = unknown> {
 }
 
 /**
+ * Reads the `XSRF-TOKEN` cookie set by Laravel's `/sanctum/csrf-cookie` endpoint
+ * and returns it URL-decoded (Laravel writes the CSRF token as an encrypted,
+ * URL-encoded cookie value). The decoded value must be sent back as the
+ * `X-XSRF-TOKEN` header so Sanctum's `ValidateCsrfToken` middleware accepts the
+ * stateful request.
+ */
+function readXsrfToken(): string | null {
+  if (typeof document === "undefined") return null;
+
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+  if (!match) return null;
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+/**
  * Tenant-aware fetch wrapper.
  */
 export class ApiClient {
@@ -115,6 +135,14 @@ export class ApiClient {
       "X-Tenant-ID": this.tenantSlug,
       ...options?.headers,
     };
+
+    // Stateful Sanctum handshake: Laravel's ValidateCsrfToken requires the
+    // XSRF token (set by /sanctum/csrf-cookie) to be returned as the
+    // X-XSRF-TOKEN header on mutating requests, or it rejects with a 419.
+    const xsrfToken = readXsrfToken();
+    if (xsrfToken) {
+      headers["X-XSRF-TOKEN"] = xsrfToken;
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
