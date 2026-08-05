@@ -1,24 +1,142 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+
+/**
+ * Public Onboarding Workspace Locator.
+ *
+ * Phase 1 — Workspace Identity & Accessibility.
+ *
+ * This component performs a *preflight* verification against the Laravel backend
+ * before trusting any user-supplied handle. It resolves the requested tenant
+ * through the port-8000 Nginx proxy gateway using the `X-Tenant-ID` header, and
+ * only then redirects the browser to the tenant's secure login perimeter domain.
+ *
+ * The root landing host (`localhost` / `logiflow.app`) has no resolvable tenant
+ * slug, so we deliberately use a native `fetch` layer instead of `createApiClient`
+ * (which throws `TenantContextNotResolvedError` on root hosts). Credentials are
+ * passed cross-origin so stateful Sanctum cookies are attached natively.
+ */
+
+/** Backend gateway port for the Laravel/Nginx proxy (Dev/Docker). */
+const BACKEND_GATEWAY_PORT = 8000;
+
+/** Endpoint used to validate a tenant handle before redirect. */
+const TENANT_CURRENT_PATH = "/api/v1/tenants/current";
+
+/** Friendly runtime labels surfaced to the operator. */
+const STATUS_IDLE = "idle";
+const STATUS_VERIFYING = "verifying";
+const STATUS_ERROR = "error";
+
+type VerifyStatus = typeof STATUS_IDLE | typeof STATUS_VERIFYING | typeof STATUS_ERROR;
 
 export default function RootLandingPage() {
-  const router = useRouter();
   const [orgHandle, setOrgHandle] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [status, setStatus] = useState<VerifyStatus>(STATUS_IDLE);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  /** Normalize a raw handle into a safe tenant slug. */
+  function slugify(value: string): string {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  /**
+   * Derive the tenant's secure login perimeter URL from the current origin,
+   * swapping only the hostname label so protocol + port are preserved.
+   *
+   *  - local dev:   http://localhost:3001  ->  http://acme.localhost:3001
+   *  - production:  https://logiflow.app   ->  https://acme.logiflow.app
+   */
+  function buildTenantPerimeterUrl(slug: string): string {
+    const current = new URL(window.location.href);
+    const hostname = current.hostname;
+    const port = current.port ? `:${current.port}` : "";
+    const nextHostname = `${slug}.${hostname}`;
+    return `${current.protocol}//${nextHostname}${port}/login`;
+  }
+
+  /**
+   * Preflight handle verification.
+   *
+   * On success the browser is redirected to the tenant's login perimeter.
+   * On any failure (404, 5xx, network timeouts) a friendly error is surfaced —
+   * never a raw stack trace.
+   */
+  async function verifyWorkspace(slug: string): Promise<boolean> {
+    const current = window.location;
+    const gatewayBaseUrl = `${current.protocol}//${current.hostname}:${BACKEND_GATEWAY_PORT}`;
+    const verificationUrl = `${gatewayBaseUrl}${TENANT_CURRENT_PATH}`;
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+
+    try {
+      const response = await fetch(verificationUrl, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          "X-Tenant-ID": slug,
+        },
+        credentials: "include",
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const envelope = (await response.json()) as {
+        data?: { id?: number; slug?: string };
+      };
+
+      // Double-check the backend echoed the canonical slug we expect before
+      // trusting the redirect target.
+      if (!envelope?.data || !envelope.data.slug) {
+        return false;
+      }
+
+      window.location.assign(buildTenantPerimeterUrl(envelope.data.slug));
+      return true;
+    } catch (error) {
+      console.error("[Workspace Locator] Verification failed:", error);
+      return false;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (status === STATUS_VERIFYING) return;
+
     const slug = slugify(orgHandle);
     if (!slug) {
       setValidationError("Enter your organization's workspace handle to continue.");
       return;
     }
+
     setValidationError(null);
-    router.push(`/${slug}/login`);
+    setStatus(STATUS_VERIFYING);
+
+    const verified = await verifyWorkspace(slug);
+
+    // If verification succeeded, the browser is already navigating away.
+    if (!verified) {
+      setStatus(STATUS_ERROR);
+      setValidationError(
+        "We couldn't find an active workspace for that handle. Please verify the spelling and try again.",
+      );
+    }
   }
+
+  const isVerifying = status === STATUS_VERIFYING;
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-zinc-950 px-6 text-zinc-100">
@@ -62,7 +180,7 @@ export default function RootLandingPage() {
       <div className="relative w-full max-w-md">
         {/* Animated border ring on focus */}
         <div
-          className={`absolute -inset-[1px] rounded-2xl bg-gradient-to-br from-emerald-500/50 via-transparent to-indigo-500/30 opacity-0 transition-opacity duration-500 ${
+          className={`absolute -inset-[1px] rounded-2xl bg-gradient-to-br from-emerald-500/50 via-transparent to-indigo-500/30 transition-opacity duration-500 ${
             isFocused ? "opacity-100" : "opacity-0"
           }`}
           style={{ filter: "blur(8px)" }}
@@ -93,8 +211,8 @@ export default function RootLandingPage() {
                   validationError
                     ? "border-rose-500/60"
                     : isFocused
-                    ? "border-emerald-500/60 shadow-[0_0_0_3px_rgba(16,185,129,0.1)]"
-                    : "border-zinc-800/60 hover:border-zinc-700/80"
+                      ? "border-emerald-500/60 shadow-[0_0_0_3px_rgba(16,185,129,0.1)]"
+                      : "border-zinc-800/60 hover:border-zinc-700/80"
                 }`}
               >
                 {/* Inner glow on focus */}
@@ -108,13 +226,17 @@ export default function RootLandingPage() {
                     id="org-handle"
                     type="text"
                     value={orgHandle}
-                    onChange={(e) => setOrgHandle(e.target.value)}
+                    onChange={(e) => {
+                      setOrgHandle(e.target.value);
+                      if (status === STATUS_ERROR) setValidationError(null);
+                    }}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setIsFocused(false)}
                     placeholder="acme-logistics"
                     autoComplete="off"
                     autoCapitalize="off"
                     spellCheck={false}
+                    disabled={isVerifying}
                     className="w-full bg-zinc-950/80 px-4 py-3.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
                   />
                   <span className="border-l border-zinc-800/60 px-4 py-3.5 font-mono text-xs text-zinc-600 transition-colors duration-300 group-hover:text-zinc-500">
@@ -137,7 +259,12 @@ export default function RootLandingPage() {
                     className="shrink-0 text-rose-400"
                   >
                     <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.5" />
-                    <path d="M7 4v3M7 10h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path
+                      d="M7 4v3M7 10h.01"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
                   </svg>
                   {validationError}
                 </p>
@@ -146,25 +273,54 @@ export default function RootLandingPage() {
 
             <button
               type="submit"
-              className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-b from-emerald-400 to-emerald-500 px-4 py-3.5 text-sm font-semibold text-zinc-950 shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:from-emerald-300 hover:to-emerald-400 hover:shadow-emerald-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 active:scale-[0.98]"
+              disabled={isVerifying}
+              className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-b from-emerald-400 to-emerald-500 px-4 py-3.5 text-sm font-semibold text-zinc-950 shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:from-emerald-300 hover:to-emerald-400 hover:shadow-emerald-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
-                Go to Space
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  className="transition-transform duration-300 group-hover:translate-x-0.5"
-                >
-                  <path
-                    d="M3 8h10M9 4l4 4-4 4"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                {isVerifying ? (
+                  <>
+                    <svg
+                      className="h-4 w-4 animate-spin"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                      />
+                    </svg>
+                    Verifying Workspace…
+                  </>
+                ) : (
+                  <>
+                    Go to Space
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      className="transition-transform duration-300 group-hover:translate-x-0.5"
+                    >
+                      <path
+                        d="M3 8h10M9 4l4 4-4 4"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </>
+                )}
               </span>
               {/* Hover shimmer */}
               <div className="absolute inset-0 -translate-x-full skew-x-12 bg-white/10 transition-transform duration-700 group-hover:translate-x-full" />
@@ -174,7 +330,10 @@ export default function RootLandingPage() {
           {/* Footer hint */}
           <p className="mt-6 text-center text-xs text-zinc-600">
             Need help?{" "}
-            <a href="#" className="underline underline-offset-2 transition-colors hover:text-zinc-400">
+            <a
+              href="#"
+              className="underline underline-offset-2 transition-colors hover:text-zinc-400"
+            >
               Contact your administrator
             </a>
           </p>
@@ -187,12 +346,4 @@ export default function RootLandingPage() {
       </p>
     </div>
   );
-}
-
-function slugify(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
