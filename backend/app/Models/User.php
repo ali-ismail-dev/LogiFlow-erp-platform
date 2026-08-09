@@ -46,4 +46,9 @@ class User extends Authenticatable
     {
         return $this->role === UserRole::Dispatcher;
     }
+    // FIXED: Appended the missing primitive helper to cover the read-only driver boundary taxonomy
+    public function isDriver(): bool
+    {
+        return $this->role === UserRole::Driver;
+    }
 }

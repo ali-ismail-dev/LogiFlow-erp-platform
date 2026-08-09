@@ -180,8 +180,8 @@ services:
       reverb:
         condition: service_started
     healthcheck:
-      # FIXED: Native shell probe testing port 80 directly to ensure Nginx is accepting traffic cleanly
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/80 && exec 3>&-"]
+      # FIXED: BusyBox wget probe (Alpine ash lacks bash-style /dev/tcp virtual files)
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 3
@@ -205,7 +205,7 @@ services:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${DB_USERNAME} -d ${DB_DATABASE}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5

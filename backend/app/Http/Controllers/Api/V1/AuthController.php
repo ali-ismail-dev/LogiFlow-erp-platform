@@ -38,7 +38,9 @@ final class AuthController extends Controller
 
         // Guard B: Deep multi-tenant cross-login interception firewall
         if ((int) $user->tenant_id !== (int) $tenantManager->id) {
-            Auth::logout();
+            // This app uses Laravel's stateful session guard (not Sanctum API
+            // tokens), so terminating the session is a pure session-store
+            // operation: invalidate + regenerate the CSRF token.
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
@@ -58,11 +60,15 @@ final class AuthController extends Controller
 
     /**
      * Terminate the active authenticated session cookie mesh.
+     *
+     * This application authenticates statefully via Laravel's session guard
+     * (Sanctum in "web/" SPA mode defines the guard as a RequestGuard, which
+     * has no logout() method). The correct session termination is therefore to
+     * invalidate the session store and regenerate the CSRF token, which fully
+     * drops the operator outside the corporate wall on the backend kernel.
      */
     public function logout(Request $request): JsonResponse
     {
-        Auth::logout();
-
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 

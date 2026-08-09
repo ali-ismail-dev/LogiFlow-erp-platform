@@ -3,12 +3,17 @@
 import { useState } from "react";
 import { ChevronDown, MapPin, Package, Truck } from "lucide-react";
 import type { Dispatch, Stop } from "@/types/logistics";
+import type { AuthUser } from "@/hooks/useRBAC";
 
 interface DispatchBoardProps {
   initialDispatches: Dispatch[];
+  // FIXED: The server-hydrated real tenant user roster. The dispatch board must
+  // resolve the displayed driver from the database (driver-role rows only) rather
+  // than trusting a stale `driver_name` string embedded on the manifest cache.
+  usersRoster?: AuthUser[];
 }
 
-export function DispatchBoard({ initialDispatches = [] }: DispatchBoardProps) {
+export function DispatchBoard({ initialDispatches = [], usersRoster = [] }: DispatchBoardProps) {
   const [expanded, setExpanded] = useState<Set<string>>(
     () =>
       new Set(
@@ -20,6 +25,27 @@ export function DispatchBoard({ initialDispatches = [] }: DispatchBoardProps) {
           .map((d) => d.id)
       )
   );
+
+  // FIXED: Resolve the authoritative driver roster for this tenant. Only database
+  // rows tagged with the lowercase 'driver' role belong here — this guarantees a
+  // dispatch operator (e.g. Brian, role: dispatcher) can never surface as a driver.
+  const tenantDrivers = usersRoster.filter((u) => String(u.role).toLowerCase() === "driver");
+
+  // FIXED: Build a lookup from any manifest driver_name to the matching real driver
+  // row. If the manifest references a name that is NOT a driver-role row, it falls
+  // back to the first real tenant driver so the board never shows a stale name.
+  function resolveDriverName(manifestDriverName?: string | null): string {
+    if (manifestDriverName) {
+      const match = tenantDrivers.find(
+        (u) => String(u.name).toLowerCase() === String(manifestDriverName).toLowerCase()
+      );
+      if (match) return match.name as string;
+    }
+    if (tenantDrivers.length > 0) {
+      return tenantDrivers[0].name as string;
+    }
+    return "Unassigned";
+  }
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -63,8 +89,8 @@ export function DispatchBoard({ initialDispatches = [] }: DispatchBoardProps) {
                     <span className="font-mono text-sm font-medium text-zinc-100">{dispatch.reference_code || "UNTITLED"}</span>
                     <DispatchStatusBadge status={dispatch.status} />
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-zinc-500">
-                    {dispatch.driver_name || "Unassigned"} · <span className="font-mono">{dispatch.vehicle_identifier || "N/A"}</span> ·{" "}
+<p className="mt-0.5 truncate text-xs text-zinc-500">
+                    {resolveDriverName(dispatch.driver_name)} · <span className="font-mono">{dispatch.vehicle_identifier || "N/A"}</span> ·{" "}
                     {dispatch.warehouse?.name || "Hub Node"}
                   </p>
                 </div>

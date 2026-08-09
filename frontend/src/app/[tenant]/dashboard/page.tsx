@@ -1,4 +1,5 @@
 import type { Dispatch, OperationalMetrics, LedgerLogEntry } from "@/types/logistics";
+import type { AuthUser } from "@/hooks/useRBAC";
 import { DashboardLiveSync } from "../../../components/dashboard/DashboardLiveSync";
 
 interface DashboardPageProps {
@@ -14,7 +15,9 @@ function formatTenantName(tenant: string): string {
 }
 
 /**
- * Resilient Multi-Target Client Fetcher
+ * Resilient Multi-Target Server-to-Server Fetcher
+ *
+ * Fetches data over the internal Docker network channel.
  */
 async function fetchFromBackend<T>(tenant: string, path: string): Promise<T | null> {
   const urls = [
@@ -47,21 +50,24 @@ async function fetchFromBackend<T>(tenant: string, path: string): Promise<T | nu
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const { tenant } = params;
 
-  // Hydrate all database arrays concurrently on the server layer before rendering
-  const dispatches = await fetchFromBackend<Dispatch[]>(tenant, "/api/v1/dispatches") || [];
-  const tenantInfo = await fetchFromBackend<{ id: number; slug: string }>(tenant, "/api/v1/tenants/current");
+  // Hydrate data concurrently. Note: /auth/me will return null over internal Docker network,
+  // which is expected. The client-side hook will complete browser-level authentication.
+  const [dispatches, tenantInfo, authUser, usersRoster] = await Promise.all([
+    fetchFromBackend<Dispatch[]>(tenant, "/api/v1/dispatches"),
+    fetchFromBackend<{ id: number; slug: string }>(tenant, "/api/v1/tenants/current"),
+    fetchFromBackend<AuthUser>(tenant, "/api/v1/auth/me"),
+    fetchFromBackend<AuthUser[]>(tenant, "/api/v1/users"),
+  ]);
 
-  // FIXED: Lock the ID directly to the database truth row, fallback to 11 if booting up
+  const resolvedDispatches = dispatches || [];
+  const resolvedUsers = usersRoster || [];
   const resolvedTenantId = tenantInfo ? String(tenantInfo.id) : "11";
 
   const metrics: OperationalMetrics = {
-    total_dispatches: dispatches.length,
-    pending_stops: dispatches.reduce((acc, d) => acc + (d.stops?.filter(s => String(s.status).toLowerCase() === "pending").length || 0), 0),
-    live_delays: dispatches.filter(d => String(d.status).toLowerCase() === "delayed").length,
-    active_drivers: dispatches.filter(d => {
-      const s = String(d.status).toLowerCase();
-      return s === "in_transit" || s === "delayed" || s === "picked_up" || s === "out_for_delivery";
-    }).length,
+    total_dispatches: resolvedDispatches.length,
+    pending_stops: resolvedDispatches.reduce((acc, d) => acc + (d.stops?.filter(s => String(s.status).toLowerCase() === "pending").length || 0), 0),
+    live_delays: resolvedDispatches.filter(d => String(d.status).toLowerCase() === "delayed").length,
+    active_drivers: resolvedUsers.filter(u => String(u.role).toLowerCase() === "driver").length,
   };
 
   const ledgerEntries: LedgerLogEntry[] = [
@@ -88,12 +94,14 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
       </header>
 
       <main>
-        <DashboardLiveSync 
-          initialDispatches={dispatches}
+        <DashboardLiveSync
+          initialDispatches={resolvedDispatches}
           initialMetrics={metrics}
           initialEntries={ledgerEntries}
           tenantSlug={tenant}
-          tenantId={resolvedTenantId} // FIXED: Injects the clean resolved ID token
+          tenantId={resolvedTenantId}
+          authUser={authUser}
+          usersRoster={resolvedUsers}
         />
       </main>
     </div>

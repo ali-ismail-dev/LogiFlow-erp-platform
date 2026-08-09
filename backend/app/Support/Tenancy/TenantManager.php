@@ -30,6 +30,15 @@ final class TenantManager
     }
 
     /**
+     * Retrieve the currently resolved Tenant model instance.
+     * Returns null when no tenant context has been established.
+     */
+    public function getTenant(): ?Tenant
+    {
+        return $this->tenant;
+    }
+
+    /**
      * Set the tenant context directly using a raw numeric or string identifier.
      * Crucial for CLI background workers/queues where no HTTP request exists.
      */

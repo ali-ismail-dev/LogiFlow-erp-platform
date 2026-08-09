@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\DispatchController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\TenantController;
 use App\Http\Controllers\Api\V1\Webhooks\CarrierWebhookController;
+use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,6 +31,8 @@ Route::middleware(['tenant', 'auth:sanctum'])
     ->group(function (): void {
         Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
         Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
+        // The write-side employee provisioning endpoint stays inside the auth perimeter.
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
     });
 
 // Tenant-Scoped Operational Endpoints: Tenant-resolved but NOT auth-protected.
@@ -42,4 +45,8 @@ Route::middleware(['tenant'])
     ->group(function (): void {
         Route::get('/dispatches', [DispatchController::class, 'index'])->name('dispatches.index');
         Route::get('/tenants/current', [TenantController::class, 'current'])->name('tenants.current');
+        // FIXED: Employee roster GET is now SSR-reachable (no session cookie needed over
+        // the Docker internal network) so the dashboard's active_drivers metric can
+        // derive from the real database driver-role rows instead of an empty roster.
+        Route::get('/users', [UserController::class, 'index'])->name('users.index');
     });

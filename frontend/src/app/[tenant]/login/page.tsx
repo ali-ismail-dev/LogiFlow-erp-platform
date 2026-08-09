@@ -29,6 +29,10 @@ export default function TenantLoginPage() {
     setIsSubmitting(true);
     setErrorMessage(null);
 
+    // Once a successful redirect is initiated, keep the button in its loading/
+    // disabled state until the navigation completes and this component unmounts.
+    let redirectStarted = false;
+
     try {
       const currentHostname = window.location.hostname;
       const currentProtocol = window.location.protocol;
@@ -56,7 +60,11 @@ export default function TenantLoginPage() {
 
       if (response.status === 200) {
         console.log("[Auth Ingress] Security handshake verified. Redirecting to workspace...");
+        // Mark that navigation has been initiated so the button remains in its
+        // loading state throughout the page transition, not just during the request.
+        redirectStarted = true;
         router.push(`/${tenant}/dashboard`);
+        return;
       } else {
         // Surface the backend's actual error when available (e.g. validation
         // errors, CSRF failures, tenant boundary violations) instead of a
@@ -77,7 +85,12 @@ export default function TenantLoginPage() {
         setErrorMessage("Authentication gateway timeout. Verification failed.");
       }
     } finally {
-      setIsSubmitting(false);
+      // Only re-enable the button if we did NOT trigger a navigation. When a
+      // redirect is in flight, leave isSubmitting true so the button stays
+      // disabled and shows the loading spinner until the component unmounts.
+      if (!redirectStarted) {
+        setIsSubmitting(false);
+      }
     }
   }
 
@@ -165,9 +178,35 @@ export default function TenantLoginPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="group relative w-full overflow-hidden rounded-xl bg-gradient-to-b from-emerald-400 to-emerald-500 px-4 py-3 text-sm font-semibold text-zinc-950 shadow-lg"
+              className={`group relative w-full overflow-hidden rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200
+                ${isSubmitting
+                  ? "cursor-not-allowed bg-zinc-800 text-zinc-400 shadow-none"
+                  : "cursor-pointer bg-gradient-to-b from-emerald-400 to-emerald-500 text-zinc-950 shadow-lg hover:from-emerald-300 hover:to-emerald-400 active:scale-[0.99]"
+                }`}
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
+                {isSubmitting && (
+                  <svg
+                    className="h-4 w-4 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-90"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
+                  </svg>
+                )}
                 {isSubmitting ? "Verifying Identity..." : "Authenticate Session"}
               </span>
             </button>

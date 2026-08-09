@@ -17,11 +17,15 @@ $manager->clear();
 $manager->resolve($tenant);
 
 // Initialize a completely new, independent manifest run entry row
+// FIXED: The dispatch manifest is now explicitly assigned to our freshly
+// provisioned corporate driver, Sarah Thomas, instead of the dispatch
+// operator Brian OConner. This keeps the manifests aligned with the real
+// database user roster where Sarah holds the 'driver' role.
 $dispatch = Dispatch::create([
     'tenant_id' => $tenant->id,
     'reference_code' => 'DSP-REVERB-SUCCESS-100',
-    'driver_name' => 'Brian OConner',
-    'vehicle_identifier' => 'SUPRA-94',
+    'driver_name' => 'Sarah Thomas',
+    'vehicle_identifier' => 'VAN-EMERALD-01',
     'status' => 'in_transit',
     'departed_at' => now()->toIso8601String(),
 ]);

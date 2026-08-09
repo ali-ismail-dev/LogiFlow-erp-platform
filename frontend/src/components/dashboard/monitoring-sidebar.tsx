@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Dispatch, LedgerLogEntry } from "@/types/logistics";
+import type { LedgerLogEntry } from "@/types/logistics";
+import type { AuthUser } from "@/hooks/useRBAC";
 
 interface MonitoringSidebarProps {
-  dispatches?: Dispatch[];      // Made optional to absorb loose initial properties
   initialEntries: LedgerLogEntry[]; // FIXED: Aligned properties name with File 1's call invocation
+  // FIXED: The Active Drivers sidebar must render from the same real database
+  // roster (server-hydrated users array) that powers the active_drivers metric
+  // count, rather than parsing loose text strings embedded on the dispatches
+  // manifest cache. This guarantees the count and the profile list always agree.
+  usersRoster?: AuthUser[];
 }
 
 const SIMULATED_LOG_MESSAGES = [
@@ -15,14 +20,13 @@ const SIMULATED_LOG_MESSAGES = [
   "Fuel surcharge ledger updated",
 ];
 
-export function MonitoringSidebar({ dispatches = [], initialEntries }: MonitoringSidebarProps) {
+export function MonitoringSidebar({ initialEntries, usersRoster = [] }: MonitoringSidebarProps) {
   const [ledgerEntries, setLedgerEntries] = useState(initialEntries);
 
-  // FIXED: Defensive string parsing catches both internal statuses and real-time carrier status updates
-  const activeDrivers = dispatches.filter((d) => {
-    const s = String(d.status).toLowerCase();
-    return s === "in_transit" || s === "delayed" || s === "picked_up" || s === "out_for_delivery";
-  });
+  // FIXED: Active drivers are sourced from the real database roster filtered by
+  // the lowercase 'driver' role parameter key — the exact same predicate that
+  // computes the active_drivers metric count up in the metrics feed.
+  const activeDrivers = usersRoster.filter((u) => String(u.role).toLowerCase() === "driver");
 
   useEffect(() => {
     setLedgerEntries(initialEntries);
@@ -54,28 +58,19 @@ export function MonitoringSidebar({ dispatches = [], initialEntries }: Monitorin
               No drivers currently active.
             </p>
           )}
-          {activeDrivers.map((dispatch) => {
-            const isDelayed = String(dispatch.status).toLowerCase() === "delayed";
+          {activeDrivers.map((driver) => {
             return (
               <div
-                key={dispatch.id}
+                key={driver.id}
                 className="flex items-center justify-between rounded-lg border border-zinc-800/60 bg-zinc-900/50 p-3"
               >
                 <div className="min-w-0 flex-1 pr-2">
-                  <p className="truncate text-sm font-medium text-zinc-200">{dispatch.driver_name ?? "Unassigned Driver"}</p>
-                  <p className="font-mono text-[11px] text-zinc-500">{dispatch.vehicle_identifier ?? "N/A"}</p>
+                  <p className="truncate text-sm font-medium text-zinc-200">{driver.name ?? "Unassigned Driver"}</p>
+                  <p className="font-mono text-[11px] text-zinc-500">{driver.email ?? "N/A"}</p>
                 </div>
                 <span className="relative flex h-2 w-2 flex-none">
-                  <span
-                    className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${
-                      isDelayed ? "bg-rose-400" : "bg-emerald-400"
-                    }`}
-                  />
-                  <span
-                    className={`relative inline-flex h-2 w-2 rounded-full ${
-                      isDelayed ? "bg-rose-500" : "bg-emerald-500"
-                    }`}
-                  />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 bg-emerald-400" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
                 </span>
               </div>
             );

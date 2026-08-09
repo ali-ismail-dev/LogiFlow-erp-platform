@@ -33,6 +33,29 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant' => TenantMiddleware::class,
             'broadcast.user' => ResolveBroadcastUser::class,
         ]);
+
+        // CRITICAL FIX: Laravel's built-in middleware priority reorders route
+        // middleware so `auth:sanctum` (Authenticate) runs BEFORE our custom
+        // `tenant` middleware. When Sanctum resolves the session user via
+        // Auth::user(), the TenantScope global scope fires against a User
+        // query *before* TenantManager has been resolved — throwing
+        // TenantContextNotResolvedException (HTTP 500 on /auth/me).
+        //
+        // By explicitly elevating TenantMiddleware in the priority chain
+        // (ABOVE Authenticate), the tenant boundary is always resolved first,
+        // so Sanctum's user lookup is safely tenant-scoped.
+        $middleware->priority([
+            \Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests::class,
+            \Illuminate\Cookie\Middleware\EncryptCookies::class,
+            \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+            \Illuminate\Session\Middleware\StartSession::class,
+            \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+            \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+            \App\Http\Middleware\TenantMiddleware::class,
+            \Illuminate\Auth\Middleware\Authenticate::class,
+            \Illuminate\Auth\Middleware\Authorize::class,
+            \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Guarantees all API errors return clean JSON structures instead of HTML splash views

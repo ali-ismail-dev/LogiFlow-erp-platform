@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 import type { Dispatch, LedgerLogEntry, OperationalMetrics } from "@/types/logistics";
+import { useRBAC, ROLE_LABELS, type AuthUser } from "@/hooks/useRBAC";
 import { MetricsFeed } from "./metrics-feed";
 import { DispatchBoard } from "./dispatch-board";
 import { MonitoringSidebar } from "./monitoring-sidebar";
 import { getBroadcastingAuthUrl } from "@/lib/reverb-auth";
+import { LogoutButton } from "./LogoutButton";
 
 type LiveDispatchEvent = {
   id: string | number;
@@ -37,6 +40,11 @@ interface DashboardLiveSyncProps {
   initialEntries: LedgerLogEntry[];
   tenantSlug: string;
   tenantId: string | number;
+  authUser: AuthUser | null;
+  // FIXED: The server-hydrated real database user roster. Forwarded to the
+  // MonitoringSidebar so the Active Drivers list and the active_drivers metric
+  // count both derive from the exact same source of truth (driver-role rows).
+  usersRoster?: AuthUser[];
 }
 
 if (typeof window !== "undefined") {
@@ -71,9 +79,25 @@ export function DashboardLiveSync({
   initialEntries,
   tenantSlug,
   tenantId,
+  usersRoster = [],
 }: DashboardLiveSyncProps) {
   const [dispatches, setDispatches] = useState<Dispatch[]>(initialDispatches);
   const [metrics, setMetrics] = useState<OperationalMetrics>(initialMetrics);
+
+  const router = useRouter();
+
+  // FIXED: Resolve the cockpit operative's identity and role natively in the browser
+  // via the same client-side /auth/me handshake the Employees page uses (which is
+  // proven to work — it carries the authenticated session cookie and resolves
+  // super_admin). Passing the server-hydrated `authUser` (null over the internal
+  // SSR network) and forcing skipFetch had been short-circuiting role resolution,
+  // leaving the operative as "Guest" and suppressing the RBAC-gated Team Directory
+  // button. With no injected user and no skip, useRBAC fetches the real session role.
+  const currentUserRole = useRBAC();
+
+  const activeOperativeLabel = currentUserRole.role ? ROLE_LABELS[currentUserRole.role] : "Guest Operative";
+
+  console.debug(`[Dashboard] Active cockpit operative: ${activeOperativeLabel}`);
 
   useEffect(() => {
     const echo = new Echo({
@@ -127,21 +151,23 @@ export function DashboardLiveSync({
         } as Dispatch;
 
         let next = index === -1 ? [nextDispatch, ...prev] : prev.map((d) => String(d.id) === String(incomingId) ? nextDispatch : d);
-        
+
         // FIXED: Corrected mathematical array sorting subtraction to maintain pristine chronological layout ordering (Oldest on top)
-        next.sort((a, b) => Number(a.id) - Number(b.id)); 
+        next.sort((a, b) => Number(a.id) - Number(b.id));
 
-        const activeDriversCount = next.filter((d) => {
-          const s = String(d.status).toLowerCase();
-          return s === "in_transit" || s === "delayed" || s === "picked_up" || s === "out_for_delivery";
-        }).length;
+        // Calculate manifest‑specific operational metrics in real‑time
+        const pendingStopsCount = next.reduce((acc, curr) => acc + (curr.stops?.filter((s) => String(s.status).toLowerCase() === "pending").length || 0), 0);
+        const liveDelaysCount = next.filter((d) => String(d.status).toLowerCase() === "delayed").length;
 
-        setMetrics({
+        setMetrics((prevMetrics) => ({
+          ...prevMetrics,
           total_dispatches: next.length,
-          pending_stops: next.reduce((acc, curr) => acc + (curr.stops?.filter((s) => String(s.status).toLowerCase() === "pending").length || 0), 0),
-          live_delays: next.filter((d) => String(d.status).toLowerCase() === "delayed").length,
-          active_drivers: activeDriversCount,
-        });
+          pending_stops: pendingStopsCount,
+          live_delays: liveDelaysCount,
+          // FIXED: Retain the true database‑backed driver count from server hydration
+          // instead of blindly overwriting it with names extracted from live manifests.
+          active_drivers: prevMetrics.active_drivers,
+        }));
 
         return next;
       });
@@ -159,14 +185,35 @@ export function DashboardLiveSync({
 
   return (
     <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-12 lg:gap-6 lg:p-8">
+      <div className="flex items-center justify-between gap-3 lg:col-span-12">
+        <div className="flex items-center gap-3">
+          {currentUserRole.can("invite_users") && (
+            <button
+              type="button"
+              onClick={() => router.push(`/${tenantSlug}/employees`)}
+              className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-2 text-xs font-semibold tracking-wide text-zinc-300 transition-all hover:border-zinc-700 hover:text-zinc-100"
+            >
+              Manage Team Directory →
+            </button>
+          )}
+        </div>
+
+        {/*
+          Security perimeter control — lets the SuperAdmin terminate their own
+          stateful session on command and drop cleanly back to the login gateway.
+        */}
+        <div className="flex items-center">
+          <LogoutButton />
+        </div>
+      </div>
       <aside className="lg:col-span-3">
         <MetricsFeed initialMetrics={metrics} />
       </aside>
       <section className="lg:col-span-6">
-        <DispatchBoard initialDispatches={dispatches} />
+        <DispatchBoard initialDispatches={dispatches} usersRoster={usersRoster} />
       </section>
       <aside className="lg:col-span-3">
-        <MonitoringSidebar dispatches={dispatches} initialEntries={initialEntries} />
+        <MonitoringSidebar initialEntries={initialEntries} usersRoster={usersRoster} />
       </aside>
     </div>
   );

@@ -9,4 +9,5 @@ enum UserRole: string
     case Dispatcher = 'dispatcher';
     case WarehouseManager = 'warehouse_manager';
     case SuperAdmin = 'super_admin';
+    case Driver = 'driver';
 }
