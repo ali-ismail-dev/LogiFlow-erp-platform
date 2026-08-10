@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\Api\V1\DispatchController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\DriverController;
 use App\Http\Controllers\Api\V1\TenantController;
 use App\Http\Controllers\Api\V1\Webhooks\CarrierWebhookController;
 use App\Http\Controllers\Api\V1\UserController;
+use App\Http\Controllers\Api\V1\VehicleController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -33,6 +35,12 @@ Route::middleware(['tenant', 'auth:sanctum'])
         Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
         // The write-side employee provisioning endpoint stays inside the auth perimeter.
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        // Phase 3.1 Driver Domain endpoints — tenant-aware, auth-protected.
+        Route::get('/drivers', [DriverController::class, 'index'])->name('drivers.index');
+        Route::post('/drivers', [DriverController::class, 'store'])->name('drivers.store');
+        // Phase 3.2 Fleet Domain endpoints — tenant-aware, auth-protected.
+        Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles.index');
+        Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
     });
 
 // Tenant-Scoped Operational Endpoints: Tenant-resolved but NOT auth-protected.
