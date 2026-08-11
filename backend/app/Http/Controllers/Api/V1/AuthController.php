@@ -41,8 +41,11 @@ final class AuthController extends Controller
             // This app uses Laravel's stateful session guard (not Sanctum API
             // tokens), so terminating the session is a pure session-store
             // operation: invalidate + regenerate the CSRF token.
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
+            Auth::guard('web')->logout();
+            if ($request->hasSession()) {
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+            }
 
             return response()->json([
                 'message' => 'Unauthorized tenant boundary violation entry attempt.'
@@ -50,7 +53,9 @@ final class AuthController extends Controller
         }
 
         // Senior Pattern: Regenerate the session ID to completely block Session Hijacking/Fixation attacks
-        $request->session()->regenerate();
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
 
         return response()->json([
             'message' => 'Authenticated successfully.',
@@ -69,8 +74,18 @@ final class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        Auth::shouldUse('web');
+
+        if (Auth::guard('web')->check()) {
+            Auth::guard('web')->logout();
+        }
+
+        $request->setUserResolver(static fn() => null);
+
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json([
             'message' => 'Logged out successfully.'

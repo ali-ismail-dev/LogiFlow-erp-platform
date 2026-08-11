@@ -4,7 +4,6 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
-use App\Http\Middleware\ResolveBroadcastUser;
 use App\Http\Middleware\TenantMiddleware;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -17,31 +16,26 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withBroadcasting(
         channels: __DIR__ . '/../routes/channels.php',
         attributes: [
-            // The default `/broadcasting/auth` route gets the `web` group from
-            // Laravel. We append `tenant` (slug/header resolution) and
-            // `broadcast.user` (dev-only authenticated-user resolution for the
-            // private-channel gate) so the auth handshake can succeed end to end.
-            'middleware' => ['web', 'tenant', 'broadcast.user'],
+            // FIXED: Removed 'broadcast.user'. The real 'web' and 'tenant' 
+            // session stacks are now the sole, secure arbiters of channel authentication.
+            'middleware' => ['web', 'tenant'],
         ],
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // REQUIRED: Activates Sanctum's cross-domain SPA session cookie tracking layer
         $middleware->statefulApi();
 
+        // The application authenticates against Laravel's session guard for the
+        // tenant-scoped API, not bearer tokens. These routes therefore live under
+        // the web/session stack and must opt out of CSRF validation for API paths.
+        $middleware->validateCsrfTokens(except: ['api/*', 'broadcasting/auth']);
+
         // ALIAS MAP: Links the short route handle 'tenant' to our strict isolation interceptor
         $middleware->alias([
             'tenant' => TenantMiddleware::class,
-            'broadcast.user' => ResolveBroadcastUser::class,
         ]);
 
-        // CRITICAL FIX: Laravel's built-in middleware priority reorders route
-        // middleware so `auth:sanctum` (Authenticate) runs BEFORE our custom
-        // `tenant` middleware. When Sanctum resolves the session user via
-        // Auth::user(), the TenantScope global scope fires against a User
-        // query *before* TenantManager has been resolved — throwing
-        // TenantContextNotResolvedException (HTTP 500 on /auth/me).
-        //
-        // By explicitly elevating TenantMiddleware in the priority chain
+        // CRITICAL FIX: Explicitly elevating TenantMiddleware in the priority chain
         // (ABOVE Authenticate), the tenant boundary is always resolved first,
         // so Sanctum's user lookup is safely tenant-scoped.
         $middleware->priority([

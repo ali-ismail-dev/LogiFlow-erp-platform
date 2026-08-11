@@ -26,8 +26,9 @@ Route::middleware(['web', 'tenant'])
         Route::post('/auth/login', [AuthController::class, 'login'])->name('api.v1.auth.login');
     });
 
-// Protected Tenant-Scoped Endpoints: Require a resolved tenant and a valid Sanctum session
-Route::middleware(['tenant', 'auth:sanctum'])
+// Protected Tenant-Scoped Endpoints: Require a resolved tenant, an active web session,
+// and a valid Sanctum session so logout and identity reads operate on the real session store.
+Route::middleware(['web', 'tenant', 'auth:sanctum'])
     ->prefix('v1')
     ->name('api.v1.')
     ->group(function (): void {
