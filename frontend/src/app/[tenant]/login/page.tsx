@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createApiClient } from "@/lib/api/apiClient";
+import { buildTenantAwarePath } from "@/lib/tenant-routing";
 
 export default function TenantLoginPage() {
   const params = useParams();
@@ -60,10 +61,26 @@ export default function TenantLoginPage() {
 
       if (response.status === 200) {
         console.log("[Auth Ingress] Security handshake verified. Redirecting to workspace...");
-        // Mark that navigation has been initiated so the button remains in its
-        // loading state throughout the page transition, not just during the request.
+
+        const userRole = String(response.data?.data?.role ?? response.data?.user?.role ?? "").toLowerCase();
+        
+        // Check if the current hostname prefix matches our active tenant slug context
+        const carriesSubdomain = currentHostname === tenant || currentHostname.startsWith(`${tenant}.`);
+
+        const targetDashboardPath = carriesSubdomain
+          ? "/dashboard"
+          : buildTenantAwarePath("/dashboard", tenant);
+
+        const targetDriverPath = carriesSubdomain
+          ? "/driver/dashboard"
+          : buildTenantAwarePath("/driver/dashboard", tenant);
+
         redirectStarted = true;
-        router.push(`/${tenant}/dashboard`);
+        if (userRole === "driver") {
+          router.push(targetDriverPath);
+        } else {
+          router.push(targetDashboardPath);
+        }
         return;
       } else {
         // Surface the backend's actual error when available (e.g. validation

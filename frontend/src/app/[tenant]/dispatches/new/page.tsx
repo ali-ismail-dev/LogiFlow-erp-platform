@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useRBAC } from "@/hooks/useRBAC";
 import { createApiClient } from "@/lib/api/apiClient";
+import { buildTenantAwarePath } from "@/lib/tenant-routing";
 
 interface OrderRecord {
   id: number | string;
@@ -62,6 +63,7 @@ export default function NewDispatchPage() {
   const params = useParams();
   const tenant = (params?.tenant as string) || "unknown";
   const router = useRouter();
+  const dashboardHref = buildTenantAwarePath("/dashboard", tenant);
 
   const { isSuperAdmin, isDispatcher, loading: rbacLoading } = useRBAC();
   const authorized = isSuperAdmin || isDispatcher;
@@ -245,7 +247,7 @@ export default function NewDispatchPage() {
 
         setSubmitState("success");
         setTimeout(() => {
-          router.push(`/${tenant}/dashboard`);
+          router.push(buildTenantAwarePath("/dashboard", tenant));
         }, 1600);
       } catch (error) {
         setErrorMessage(resolveErrorMessage(error));
@@ -280,7 +282,7 @@ export default function NewDispatchPage() {
             Manifest compilation is restricted to authorized dispatch personnel only.
           </p>
           <Link
-            href={`/${tenant}/dashboard`}
+            href={dashboardHref}
             className="mt-6 inline-flex items-center justify-center rounded-xl border border-rose-400/30 bg-zinc-950/40 px-4 py-2.5 text-sm font-medium text-rose-200 transition hover:border-rose-400/50 hover:text-white"
           >
             Return to dashboard
@@ -295,7 +297,7 @@ export default function NewDispatchPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <Link href={`/${tenant}/dashboard`} className="inline-flex items-center gap-2 text-xs text-zinc-400 transition hover:text-zinc-200">
+            <Link href={dashboardHref} className="inline-flex items-center gap-2 text-xs text-zinc-400 transition hover:text-zinc-200">
               <span aria-hidden="true">←</span>
               Back to dashboard
             </Link>

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createApiClient } from "@/lib/api/apiClient";
 import { useRBAC, ROLE_LABELS, type UserRole } from "@/hooks/useRBAC";
+import { buildTenantAwarePath } from "@/lib/tenant-routing";
 
 interface TeamMember {
   id: number | string;
@@ -25,6 +26,7 @@ export default function EmployeesPage() {
 
   const { can, loading: rbacLoading } = useRBAC();
   const canManageTeam = can("invite_users");
+  const dashboardHref = buildTenantAwarePath("/dashboard", tenant);
 
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -142,7 +144,7 @@ export default function EmployeesPage() {
         <p className="mt-2 max-w-md text-sm text-zinc-500">
           Your active session role does not possess permissions to audit user configurations. Contact your organization administrator.
         </p>
-        <Link href={`/${tenant}/dashboard`} className="mt-5 text-xs text-emerald-400 underline hover:text-emerald-300">
+        <Link href={dashboardHref} className="mt-5 text-xs text-emerald-400 underline hover:text-emerald-300">
           Return to Cockpit Dashboard
         </Link>
       </div>
@@ -155,7 +157,7 @@ export default function EmployeesPage() {
         
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-zinc-900 pb-6">
           <div>
-            <Link href={`/${tenant}/dashboard`} className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300">
+            <Link href={dashboardHref} className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300">
               ← Dashboard Cockpit
             </Link>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">Team Directory</h1>

@@ -10,6 +10,7 @@ import { MetricsFeed } from "./metrics-feed";
 import { DispatchBoard } from "./dispatch-board";
 import { MonitoringSidebar } from "./monitoring-sidebar";
 import { getBroadcastingAuthUrl } from "@/lib/reverb-auth";
+import { buildTenantAwarePath } from "@/lib/tenant-routing";
 import { LogoutButton } from "./LogoutButton";
 
 type LiveDispatchEvent = {
@@ -190,7 +191,7 @@ export function DashboardLiveSync({
           {currentUserRole.can("invite_users") && (
             <button
               type="button"
-              onClick={() => router.push(`/${tenantSlug}/employees`)}
+              onClick={() => router.push(buildTenantAwarePath("/employees", tenantSlug))}
               className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-2 text-xs font-semibold tracking-wide text-zinc-300 transition-all hover:border-zinc-700 hover:text-zinc-100"
             >
               Manage Team Directory →

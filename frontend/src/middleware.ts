@@ -27,7 +27,14 @@ const SESSION_COOKIE_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /** Top-level path segments that require a valid session. */
-const PROTECTED_SEGMENTS: ReadonlySet<string> = new Set(["dashboard", "dispatches", "employees"]);
+const PROTECTED_SEGMENTS: ReadonlySet<string> = new Set([
+  "dashboard",
+  "dispatches",
+  "employees",
+  "drivers",
+  "vehicles",
+  "driver",
+]);
 
 /** Slug character set — only allow lower-case alphanumerics and single hyphens. */
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

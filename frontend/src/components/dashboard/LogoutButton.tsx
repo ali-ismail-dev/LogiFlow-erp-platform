@@ -3,6 +3,7 @@
 import { useState, type MouseEvent } from "react";
 import { useParams } from "next/navigation";
 import { createApiClient } from "@/lib/api/apiClient";
+import { buildTenantAwarePath, isTenantSubdomainActive } from "@/lib/tenant-routing";
 
 /**
  * LogoutButton.tsx
@@ -63,10 +64,17 @@ export function LogoutButton() {
    */
   function buildLoginPath(): string {
     const cleaned = String(tenant ?? "").trim();
+    const currentHostname = typeof window !== "undefined" ? window.location.hostname : "";
+
     if (!cleaned || cleaned === "null" || cleaned === "undefined") {
       return "/login";
     }
-    return `/${cleaned}/login`;
+
+    if (isTenantSubdomainActive(currentHostname, cleaned)) {
+      return "/login";
+    }
+
+    return buildTenantAwarePath("/login", cleaned);
   }
 
   async function handleLogout(event: MouseEvent<HTMLButtonElement>): Promise<void> {

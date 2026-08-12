@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createApiClient } from "@/lib/api/apiClient";
+import { buildTenantAwarePath } from "@/lib/tenant-routing";
 import { useRBAC, type UserRole } from "@/hooks/useRBAC";
 
 // -----------------------------------------------------------------------------
@@ -67,6 +68,7 @@ function statusTone(status: string): string {
 export default function FleetDriversPage() {
 const params = useParams();
   const tenant = (params?.tenant as string) || "unknown";
+  const dashboardHref = buildTenantAwarePath("/dashboard", tenant);
 
   // ── RBAC Perimeter (fail-closed) ──
   const { isSuperAdmin, isDispatcher, loading: rbacLoading } = useRBAC();
@@ -235,7 +237,7 @@ const params = useParams();
           profiles. Contact your organization dispatcher or administrator.
         </p>
         <Link
-          href={`/${tenant}/dashboard`}
+          href={dashboardHref}
           className="mt-5 text-xs text-emerald-400 underline hover:text-emerald-300"
         >
           Return to Cockpit Dashboard
@@ -263,7 +265,7 @@ const params = useParams();
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-zinc-900 pb-6">
           <div>
             <Link
-              href={`/${tenant}/dashboard`}
+              href={dashboardHref}
               className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
             >
               ← Dashboard Cockpit
