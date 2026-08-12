@@ -104,4 +104,38 @@ final class DispatchController extends Controller
             'data' => new DispatchResource($dispatch->load('warehouse', 'stops')),
         ], 201);
     }
+
+    public function updateStatus(Request $request, string|int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:planned,in_transit,arrived,completed'],
+        ]);
+
+        $tenantManager = app(TenantManager::class);
+        $resolvedTenant = $tenantManager->getTenant();
+
+        if (! $resolvedTenant) {
+            throw new NotFoundHttpException(
+                'Unable to securely resolve an active, mapped organizational workspace context.'
+            );
+        }
+
+        $dispatch = DB::transaction(function () use ($validated, $resolvedTenant, $id): Dispatch {
+            $dispatch = Dispatch::query()
+                ->where('tenant_id', $resolvedTenant->id)
+                ->where('id', $id)
+                ->firstOrFail();
+
+            $dispatch->status = $validated['status'];
+            $dispatch->save();
+
+            event(new \App\Events\DispatchMovementUpdated($dispatch));
+
+            return $dispatch->fresh();
+        });
+
+        return response()->json([
+            'data' => new DispatchResource($dispatch),
+        ], 200);
+    }
 }

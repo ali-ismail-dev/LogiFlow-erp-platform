@@ -59,7 +59,9 @@ interface UseWebSocketsResult {
 }
 
 const REVERB_EVENT_NAME = '.dispatch.movement.updated';
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/api/v1';
+const API_BASE_URL = typeof window !== 'undefined'
+  ? `${window.location.protocol}//${window.location.hostname}:8000/api/v1`
+  : process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000/api/v1';
 
 let sharedEcho: Echo<'reverb'> | null = null;
 const channelRefCounts = new Map<string, number>();
@@ -90,7 +92,7 @@ function getSharedEcho(tenantSlug: string): Echo<'reverb'> {
   sharedEcho = new Echo<'reverb'>({
     broadcaster: 'reverb',
     key: process.env.NEXT_PUBLIC_REVERB_APP_KEY ?? 'logiflow_key',
-    wsHost: process.env.NEXT_PUBLIC_REVERB_HOST ?? 'localhost',
+    wsHost: typeof window !== 'undefined' ? window.location.hostname : (process.env.NEXT_PUBLIC_REVERB_HOST ?? 'localhost'),
     wsPort: 8000,
     wssPort: 8000,
     forceTLS: false,

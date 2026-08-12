@@ -175,20 +175,38 @@ export default function DriverDashboardPage() {
     };
   }, [router, tenant]);
 
-  const advanceStatus = (dispatchId: string) => {
-    setDispatchRows((current) =>
-      current.map((dispatch) => {
-        if (String(dispatch.id) !== String(dispatchId)) {
-          return dispatch;
-        }
+  const advanceStatus = async (dispatchId: string, currentStatus: DispatchStatus) => {
+    const nextStatus = STATUS_TRANSITION[currentStatus];
+    if (nextStatus === currentStatus) return;
 
-        const nextStatus = STATUS_TRANSITION[dispatch.status];
-        return {
-          ...dispatch,
-          status: nextStatus,
-        };
-      }),
-    );
+    try {
+      setError(null);
+      const currentHostname = window.location.hostname;
+      const currentProtocol = window.location.protocol;
+      const backendBaseUrl = `${currentProtocol}//${currentHostname}:8000/api/v1`;
+      const client = createApiClient({ baseUrl: backendBaseUrl });
+
+      const response = await client.patch<any>(
+        `/dispatches/${dispatchId}/status`,
+        { status: nextStatus },
+        { headers: { "X-Tenant-ID": tenant } }
+      );
+
+      if (response.status === 200 && response.data?.data) {
+        setDispatchRows((current) =>
+          current.map((dispatch) =>
+            String(dispatch.id) === String(dispatchId)
+              ? { ...dispatch, status: normalizeStatus(response.data.data.status) }
+              : dispatch
+          )
+        );
+      } else {
+        throw new Error("The operational gateway rejected this status progression.");
+      }
+    } catch (err: unknown) {
+      console.error("[Driver Telemetry] Status update failure:", err);
+      setError(err instanceof Error ? err.message : "Failed to broadcast real-time telemetry.");
+    }
   };
 
   const primaryButtonLabel = (status: DispatchStatus) => {
@@ -316,7 +334,7 @@ export default function DriverDashboardPage() {
 
                 <button
                   type="button"
-                  onClick={() => advanceStatus(dispatch.id)}
+                  onClick={() => advanceStatus(dispatch.id, dispatch.status)}
                   className="mt-5 w-full rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 px-4 py-3.5 text-sm font-semibold text-zinc-950 transition duration-200 hover:from-emerald-300 hover:to-emerald-400 active:scale-[0.99]"
                 >
                   {primaryButtonLabel(dispatch.status)}

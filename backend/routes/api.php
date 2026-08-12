@@ -45,6 +45,8 @@ Route::middleware(['web', 'tenant', 'auth:sanctum'])
         Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
         // Manifest creation must occur inside the authenticated tenant workspace.
         Route::post('/dispatches', [DispatchController::class, 'store'])->name('dispatches.store');
+        Route::patch('/dispatches/{dispatch}/status', [DispatchController::class, 'updateStatus'])
+            ->name('dispatches.status.update');
     });
 
 // Tenant-Scoped Operational Endpoints: Tenant-resolved but NOT auth-protected.

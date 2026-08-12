@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createApiClient } from "@/lib/api/apiClient";
+import { createApiClient, resolveTenantSlug } from "@/lib/api/apiClient";
 
 export type UserRole = "super_admin" | "dispatcher" | "warehouse_manager" | "driver";
 
@@ -80,22 +80,18 @@ export function useRBAC(options: UseRBACOptions = {}): UseRBACResult {
       try {
         const currentHostname = window.location.hostname;
         const currentProtocol = window.location.protocol;
+        // Standardize standard HTTP data requests to target the tenant-aware backend host
+        // so the browser can present the same session cookie that was created on
+        // the tenant subdomain at port 8000.
         const backendBaseUrl = `${currentProtocol}//${currentHostname}:8000/api/v1`;
+        const client = createApiClient({ baseUrl: backendBaseUrl });
 
-        // FIXED: Extract the active tenant identifier explicitly from the path segments 
-        // string array so our client factory can pass the X-Tenant-ID header to port 8000
-        const pathSegments = window.location.pathname.split("/").filter(Boolean);
-        const activeTenantSlug = pathSegments[0] || "nike";
+        const activeTenantSlug = resolveTenantSlug(currentHostname);
 
-        const client = createApiClient({
-          baseUrl: backendBaseUrl
-        });
-
-        // Inject the explicit multi-tenant tracking token directly into this standalone request options packet
         const response = await client.get<MeEnvelope>("/auth/me", {
           headers: {
-            "X-Tenant-ID": activeTenantSlug
-          }
+            ...(activeTenantSlug ? { "X-Tenant-ID": activeTenantSlug } : {}),
+          },
         });
         
         if (response.status === 200 && response.data?.data && active) {

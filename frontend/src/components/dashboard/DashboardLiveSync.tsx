@@ -11,6 +11,7 @@ import { DispatchBoard } from "./dispatch-board";
 import { MonitoringSidebar } from "./monitoring-sidebar";
 import { getBroadcastingAuthUrl } from "@/lib/reverb-auth";
 import { buildTenantAwarePath } from "@/lib/tenant-routing";
+import { createApiClient } from "@/lib/api/apiClient";
 import { LogoutButton } from "./LogoutButton";
 
 type LiveDispatchEvent = {
@@ -53,25 +54,22 @@ if (typeof window !== "undefined") {
 }
 
 const REVERB_EVENT_NAME = ".dispatch.movement.updated";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 async function authorizeChannel(channelName: string, socketId: string, tenantSlug: string) {
-  const response = await fetch(getBroadcastingAuthUrl(API_BASE_URL), {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      "X-Tenant-ID": tenantSlug,
-    },
-    body: JSON.stringify({ socket_id: socketId, channel_name: channelName }),
+  const currentProtocol = window.location.protocol;
+  const currentHostname = window.location.hostname;
+  // Keep session cookies first-party by using the active tenant host, not bare localhost.
+  const backendBaseUrl = `${currentProtocol}//${currentHostname}:8000`;
+  const client = createApiClient({ baseUrl: backendBaseUrl });
+
+  const response = await client.post<any>("/broadcasting/auth", {
+    socket_id: socketId,
+    channel_name: channelName,
+  }, {
+    headers: { "X-Tenant-ID": tenantSlug }
   });
 
-  if (!response.ok) {
-    throw new Error(`Channel authorization failed (${response.status})`);
-  }
-
-  return response.json();
+  return response.data;
 }
 
 export function DashboardLiveSync({
@@ -80,6 +78,7 @@ export function DashboardLiveSync({
   initialEntries,
   tenantSlug,
   tenantId,
+  authUser,
   usersRoster = [],
 }: DashboardLiveSyncProps) {
   const [dispatches, setDispatches] = useState<Dispatch[]>(initialDispatches);
@@ -93,18 +92,32 @@ export function DashboardLiveSync({
   // super_admin). Passing the server-hydrated `authUser` (null over the internal
   // SSR network) and forcing skipFetch had been short-circuiting role resolution,
   // leaving the operative as "Guest" and suppressing the RBAC-gated Team Directory
-  // button. With no injected user and no skip, useRBAC fetches the real session role.
-  const currentUserRole = useRBAC();
+  // button. When authUser is null, allow the browser to refetch the real session.
+  const currentUserRole = useRBAC({
+    user: authUser,
+    skipFetch: !!authUser,
+  });
 
   const activeOperativeLabel = currentUserRole.role ? ROLE_LABELS[currentUserRole.role] : "Guest Operative";
 
   console.debug(`[Dashboard] Active cockpit operative: ${activeOperativeLabel}`);
 
   useEffect(() => {
+    // FIXED: Dynamically match the backend host to the active tenant subdomain context.
+    // This keeps the Laravel session cookie in first-party context, which restores
+    // private Reverb channel authorization in Firefox when Total Cookie Protection
+    // would otherwise block the bare localhost backend asset.
+    const currentHostname = window.location.hostname;
+    const websocketHost = currentHostname.includes(".")
+      ? currentHostname
+      : tenantSlug
+        ? `${tenantSlug}.localhost`
+        : "localhost";
+
     const echo = new Echo({
       broadcaster: "reverb",
       key: process.env.NEXT_PUBLIC_REVERB_APP_KEY || "logiflow_key",
-      wsHost: process.env.NEXT_PUBLIC_REVERB_HOST || "localhost",
+      wsHost: websocketHost,
       wsPort: 8000,
       wssPort: 8000,
       forceTLS: false,
