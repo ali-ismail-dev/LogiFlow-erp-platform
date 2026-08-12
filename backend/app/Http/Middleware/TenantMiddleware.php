@@ -26,6 +26,19 @@ final class TenantMiddleware
 
         $slug = $this->extractSlug($request);
 
+        if ($this->tenantManager->check()) {
+            if ($slug === null) {
+                return $next($request);
+            }
+
+            $currentTenant = $this->tenantManager->getTenant();
+            if ($currentTenant?->slug === $slug) {
+                return $next($request);
+            }
+
+            $this->tenantManager->forget();
+        }
+
         if ($slug === null) {
             throw TenantContextNotResolvedException::forRoute($request->path());
         }

@@ -18,6 +18,7 @@ class Order extends Model
     protected $fillable = [
         'tenant_id',
         'warehouse_id',
+        'dispatch_id',
         'order_number',
         'customer_name',
         'shipping_address',
@@ -44,5 +45,10 @@ class Order extends Model
     public function stops(): HasMany
     {
         return $this->hasMany(Stop::class)->latest();
+    }
+
+    public function dispatch(): BelongsTo
+    {
+        return $this->belongsTo(Dispatch::class);
     }
 }

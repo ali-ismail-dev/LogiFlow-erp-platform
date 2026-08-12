@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\DispatchController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\DriverController;
+use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\TenantController;
 use App\Http\Controllers\Api\V1\Webhooks\CarrierWebhookController;
 use App\Http\Controllers\Api\V1\UserController;
@@ -42,6 +43,8 @@ Route::middleware(['web', 'tenant', 'auth:sanctum'])
         // Phase 3.2 Fleet Domain endpoints — tenant-aware, auth-protected.
         Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles.index');
         Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
+        // Manifest creation must occur inside the authenticated tenant workspace.
+        Route::post('/dispatches', [DispatchController::class, 'store'])->name('dispatches.store');
     });
 
 // Tenant-Scoped Operational Endpoints: Tenant-resolved but NOT auth-protected.
@@ -58,4 +61,8 @@ Route::middleware(['tenant'])
         // the Docker internal network) so the dashboard's active_drivers metric can
         // derive from the real database driver-role rows instead of an empty roster.
         Route::get('/users', [UserController::class, 'index'])->name('users.index');
+        // Expose order inventory for server-side rendering (RSC) without requiring
+        // a browser session cookie. The frontend hydrator calls this during SSR
+        // using the internal Docker network and the `X-Tenant-ID` header.
+        Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     });

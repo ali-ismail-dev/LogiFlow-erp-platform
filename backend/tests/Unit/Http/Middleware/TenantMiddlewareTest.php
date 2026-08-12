@@ -121,4 +121,25 @@ final class TenantMiddlewareTest extends TestCase
             return new Response('OK');
         });
     }
+
+    #[Test]
+    public function it_allows_an_already_resolved_tenant_when_no_slug_is_present(): void
+    {
+        $tenant = Tenant::factory()->create([
+            'slug' => 'acme',
+            'is_active' => true,
+        ]);
+
+        $this->tenantManager->resolve($tenant);
+
+        $request = Request::create('/api/v1/dispatches', 'POST');
+
+        $response = $this->middleware->handle($request, function () {
+            return new Response('OK');
+        });
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertTrue($this->tenantManager->check());
+        $this->assertEquals($tenant->id, $this->tenantManager->tenant->id);
+    }
 }
