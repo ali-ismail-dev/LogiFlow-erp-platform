@@ -1,18 +1,40 @@
 # LogiFlow | Multi-Tenant B2B Enterprise Logistics Platform
 
-> A production-grade logistics and dispatch platform featuring strict multi-tenant database isolation, real-time WebSocket telemetry, and high-concurrency transactional integrity.
+> **Production-Grade Logistics & Dispatch Engine**  
+> A highly concurrent platform featuring strict multi-tenant database isolation, real-time WebSocket telemetry, and pessimistic locking to guarantee transactional integrity during high-frequency dispatching.
 
-## 🏗 System Architecture
-
-LogiFlow is built on a decoupled architecture, separating a highly responsive client-side interface from a heavy, stateful business logic core. 
-
-* **Frontend:** Next.js (App Router), TypeScript, Tailwind CSS
-* **Backend Core:** PHP 8.4, Laravel 13, RESTful APIs
-* **Database & Caching:** PostgreSQL, Redis
-* **Real-Time Telemetry:** Laravel Reverb (WebSockets)
-* **Infrastructure:** Docker, Nginx Reverse Proxy, GitHub Actions CI/CD
+[![Laravel](https://img.shields.io/badge/Laravel-13.x-FF2D20?logo=laravel)](https://laravel.com)
+[![PHP](https://img.shields.io/badge/PHP-8.4+-777BB4?logo=php)](https://www.php.net)
+[![Next.js](https://img.shields.io/badge/Next.js-App_Router-000000?logo=next.js)](https://nextjs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql)](https://www.postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://www.docker.com)
 
 ---
+
+## 🏗 System Topology
+
+```text
+┌─────────────────┐       (WSS / Sub-second)       ┌─────────────────┐
+│  Next.js App    │ ◄────────────────────────────► │ Laravel Reverb  │
+│  (App Router)   │                                │ (Socket Server) │
+└───────┬─────────┘                                └────────┬────────┘
+        │ (REST API)                                        │ (Event Bus)
+        ▼                                                   ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                    Laravel 13 API Core (PHP 8.4)                   │
+│                                                                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │ Tenant Scope │  │ Sanctum Auth │  │ Dispatch & Route Actions │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
+└───────┬───────────────────────────────────────────────────┬────────┘
+        │ (Pessimistic Row Locks / FOR UPDATE)              │
+        ▼                                                   ▼
+┌─────────────────────────────────┐               ┌──────────────────┐
+│          PostgreSQL             │               │    Redis Cache   │
+│  (Multi-Tenant Scoped Schema)   │               │  (Telemetry &    │
+│                                 │               │   Queue Workers) │
+└─────────────────────────────────┘               └──────────────────┘
+```
 
 ## 🚀 Core Architectural Features
 
