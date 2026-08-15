@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api\V1;
 
+use App\Enums\DispatchStatus;
 use App\Enums\OrderStatus;
+use App\Enums\StopStatus;
 use App\Models\Dispatch;
 use App\Models\Driver;
 use App\Models\Order;
+use App\Models\Stop;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -103,6 +106,115 @@ class DispatchControllerTest extends TestCase
             'id' => $secondOrder->id,
             'dispatch_id' => $dispatch->id,
             'status' => OrderStatus::Dispatched->value,
+        ]);
+
+        $this->assertDatabaseHas('stops', [
+            'dispatch_id' => $dispatch->id,
+            'order_id' => $firstOrder->id,
+            'sequence' => 1,
+            'status' => 'pending',
+        ]);
+
+        $this->assertDatabaseHas('stops', [
+            'dispatch_id' => $dispatch->id,
+            'order_id' => $secondOrder->id,
+            'sequence' => 2,
+            'status' => 'pending',
+        ]);
+    }
+
+    #[Test]
+    public function it_marks_related_orders_and_stops_as_completed_when_a_dispatch_finishes(): void
+    {
+        $tenant = Tenant::factory()->create([
+            'name' => 'Northwind Logistics',
+            'slug' => 'northwind-logistics',
+        ]);
+        $this->tenantManager->setTenantId($tenant->id);
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $driver = Driver::factory()->create([
+            'tenant_id' => $tenant->id,
+            'user_id' => $user->id,
+        ]);
+
+        $vehicle = Vehicle::factory()->create([
+            'tenant_id' => $tenant->id,
+            'license_plate' => 'TRK-900',
+        ]);
+
+        $warehouse = Warehouse::factory()->create([
+            'tenant_id' => $tenant->id,
+        ]);
+
+        $dispatch = Dispatch::factory()->create([
+            'tenant_id' => $tenant->id,
+            'warehouse_id' => $warehouse->id,
+            'driver_name' => $user->name,
+            'vehicle_identifier' => $vehicle->license_plate,
+            'status' => DispatchStatus::InTransit->value,
+        ]);
+
+        $firstOrder = Order::factory()->create([
+            'tenant_id' => $tenant->id,
+            'warehouse_id' => $warehouse->id,
+            'dispatch_id' => $dispatch->id,
+            'status' => OrderStatus::Dispatched->value,
+        ]);
+
+        $secondOrder = Order::factory()->create([
+            'tenant_id' => $tenant->id,
+            'warehouse_id' => $warehouse->id,
+            'dispatch_id' => $dispatch->id,
+            'status' => OrderStatus::Dispatched->value,
+        ]);
+
+        Stop::factory()->create([
+            'tenant_id' => $tenant->id,
+            'dispatch_id' => $dispatch->id,
+            'order_id' => $firstOrder->id,
+            'sequence' => 1,
+            'status' => StopStatus::Pending->value,
+        ]);
+
+        Stop::factory()->create([
+            'tenant_id' => $tenant->id,
+            'dispatch_id' => $dispatch->id,
+            'order_id' => $secondOrder->id,
+            'sequence' => 2,
+            'status' => StopStatus::Pending->value,
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')->patchJson(
+            "/api/v1/dispatches/{$dispatch->id}/status",
+            ['status' => 'completed']
+        );
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('dispatches', [
+            'id' => $dispatch->id,
+            'status' => 'completed',
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $firstOrder->id,
+            'status' => OrderStatus::Delivered->value,
+        ]);
+        $this->assertDatabaseHas('orders', [
+            'id' => $secondOrder->id,
+            'status' => OrderStatus::Delivered->value,
+        ]);
+        $this->assertDatabaseHas('stops', [
+            'dispatch_id' => $dispatch->id,
+            'order_id' => $firstOrder->id,
+            'status' => StopStatus::Completed->value,
+        ]);
+        $this->assertDatabaseHas('stops', [
+            'dispatch_id' => $dispatch->id,
+            'order_id' => $secondOrder->id,
+            'status' => StopStatus::Completed->value,
         ]);
     }
 }

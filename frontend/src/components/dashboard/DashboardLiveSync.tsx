@@ -9,6 +9,7 @@ import { useRBAC, ROLE_LABELS, type AuthUser } from "@/hooks/useRBAC";
 import { MetricsFeed } from "./metrics-feed";
 import { DispatchBoard } from "./dispatch-board";
 import { MonitoringSidebar } from "./monitoring-sidebar";
+import { OperationalControlBoard } from "./OperationalControlBoard";
 import { getBroadcastingAuthUrl } from "@/lib/reverb-auth";
 import { buildTenantAwarePath } from "@/lib/tenant-routing";
 import { createApiClient } from "@/lib/api/apiClient";
@@ -83,6 +84,7 @@ export function DashboardLiveSync({
 }: DashboardLiveSyncProps) {
   const [dispatches, setDispatches] = useState<Dispatch[]>(initialDispatches);
   const [metrics, setMetrics] = useState<OperationalMetrics>(initialMetrics);
+  const [auditTrailEntries, setAuditTrailEntries] = useState<LedgerLogEntry[]>(initialEntries);
 
   const router = useRouter();
 
@@ -101,6 +103,20 @@ export function DashboardLiveSync({
   const activeOperativeLabel = currentUserRole.role ? ROLE_LABELS[currentUserRole.role] : "Guest Operative";
 
   console.debug(`[Dashboard] Active cockpit operative: ${activeOperativeLabel}`);
+
+  // Helper function to create an audit trail entry from a dispatch event
+  const createAuditTrailEntry = (payload: LiveDispatchEvent): LedgerLogEntry => {
+    const referenceCode = payload.reference_code || payload.reference_number || "MANIFEST";
+    const driverName = payload.driver_name || payload.driver?.name || "Assigned Driver";
+    const status = payload.status || "in_transit";
+    
+    return {
+      id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      message: `Manifest ${referenceCode} advanced to ${status} (Driver: ${driverName})`,
+      status: "success",
+      created_at: new Date().toISOString(),
+    };
+  };
 
   useEffect(() => {
     // FIXED: Dynamically match the backend host to the active tenant subdomain context.
@@ -146,6 +162,10 @@ export function DashboardLiveSync({
       const incomingId = payload.id;
 
       if (!incomingId) return;
+
+      // Create an audit trail entry from the dispatch event
+      const auditEntry = createAuditTrailEntry(payload);
+      setAuditTrailEntries((prev) => [auditEntry, ...prev].slice(0, 15));
 
       setDispatches((prev) => {
         const index = prev.findIndex((d) => String(d.id) === String(incomingId));
@@ -199,6 +219,12 @@ export function DashboardLiveSync({
 
   return (
     <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-12 lg:gap-6 lg:p-8">
+      {/* Operational Control Board - Primary Navigation */}
+      <section className="lg:col-span-12">
+        <OperationalControlBoard tenantSlug={tenantSlug} />
+      </section>
+
+      {/* Secondary Navigation and Logout */}
       <div className="flex items-center justify-between gap-3 lg:col-span-12">
         <div className="flex items-center gap-3">
           {currentUserRole.can("invite_users") && (
@@ -220,6 +246,8 @@ export function DashboardLiveSync({
           <LogoutButton />
         </div>
       </div>
+
+      {/* Analytics & Monitoring Layout */}
       <aside className="lg:col-span-3">
         <MetricsFeed initialMetrics={metrics} />
       </aside>
@@ -227,7 +255,7 @@ export function DashboardLiveSync({
         <DispatchBoard initialDispatches={dispatches} usersRoster={usersRoster} />
       </section>
       <aside className="lg:col-span-3">
-        <MonitoringSidebar initialEntries={initialEntries} usersRoster={usersRoster} />
+        <MonitoringSidebar initialEntries={auditTrailEntries} usersRoster={usersRoster} />
       </aside>
     </div>
   );

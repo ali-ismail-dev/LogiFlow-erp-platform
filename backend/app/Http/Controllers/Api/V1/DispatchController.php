@@ -7,12 +7,14 @@ namespace App\Http\Controllers\Api\V1;
 use App\Actions\Dispatch\ListDispatchesAction;
 use App\Enums\DispatchStatus;
 use App\Enums\OrderStatus;
+use App\Enums\StopStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\ListDispatchesRequest;
 use App\Http\Resources\DispatchResource;
 use App\Models\Dispatch;
 use App\Models\Order;
 use App\Models\Driver;
+use App\Models\Stop;
 use App\Models\Vehicle;
 use App\Support\Tenancy\TenantManager;
 use Illuminate\Http\JsonResponse;
@@ -74,6 +76,7 @@ final class DispatchController extends Controller
                 'vehicle_identifier' => $vehicle->license_plate,
                 'status' => DispatchStatus::Planned->value,
                 'reference_code' => 'DISP-' . now()->format('YmdHis') . '-' . random_int(1000, 9999),
+                'scheduled_at' => now(),
             ]);
 
             $orderIds = array_values(array_unique($validated['order_ids']));
@@ -83,6 +86,8 @@ final class DispatchController extends Controller
                 ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
+
+            $sequence = 1;
 
             foreach ($orderIds as $orderId) {
                 $order = $orders->get($orderId);
@@ -95,6 +100,23 @@ final class DispatchController extends Controller
                     'status' => OrderStatus::Dispatched->value,
                     'dispatch_id' => $dispatch->id,
                 ]);
+
+                Stop::create([
+                    'tenant_id' => $resolvedTenant->id,
+                    'dispatch_id' => $dispatch->id,
+                    'order_id' => $order->id,
+                    'sequence' => $sequence,
+                    'destination_address' => $order->shipping_address ?? [
+                        'street' => null,
+                        'city' => null,
+                        'state' => null,
+                        'postal_code' => null,
+                        'country' => null,
+                    ],
+                    'status' => StopStatus::Pending->value,
+                ]);
+
+                $sequence++;
             }
 
             return $dispatch->fresh();
@@ -127,7 +149,33 @@ final class DispatchController extends Controller
                 ->firstOrFail();
 
             $dispatch->status = $validated['status'];
+
+            // AUTOMATION FIX: Lock in a real timestamp when the driver clicks 'Start Run'
+            // so that management cockpits and mobile viewports display live departure times.
+            if ($validated['status'] === 'in_transit') {
+                $dispatch->departed_at = now();
+            }
+
+            // CASCADING TRANSITION FIX: Automatically advance child rows upon manifest completion
+            if ($validated['status'] === 'completed') {
+                // Advance all child stops bound to this manifest to completed.
+                $dispatch->stops()->update(['status' => StopStatus::Completed->value]);
+
+                // Use a direct tenant-scoped query for the child orders to avoid
+                // relation resolution issues in stale or partially cached runtime states.
+                Order::query()
+                    ->where('tenant_id', $resolvedTenant->id)
+                    ->where('dispatch_id', $dispatch->id)
+                    ->update(['status' => OrderStatus::Delivered->value]);
+
+                $dispatch->completed_at = now();
+            }
+
             $dispatch->save();
+
+            // REAL-TIME SYNCHRONIZATION FIX: Hydrate child structures before broadcasting
+            // so the admin dashboard UI grid can update counters reactively with zero refresh lags.
+            $dispatch->load(['warehouse', 'stops', 'orders']);
 
             event(new \App\Events\DispatchMovementUpdated($dispatch));
 

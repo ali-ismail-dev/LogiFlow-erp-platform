@@ -114,6 +114,16 @@ class Dispatch extends Model
     }
 
     /**
+     * Get the multiple client order records bundled onto this route manifest run.
+     *
+     * @return HasMany
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    /**
      * Relational helper for active stop sequencing tracking metrics.
      *
      * Uses withoutTenancy() to remain safe in contexts where no tenant

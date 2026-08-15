@@ -140,9 +140,13 @@ export function middleware(request: NextRequest) {
 
   if (protectedTenant && !hasSessionCookie(request)) {
     const loginUrl = url.clone();
-    // `protectedTenant` has already passed `sanitizeTenant`, so it is a clean,
-    // deterministic slug that can never compile "/null/login".
-    loginUrl.pathname = `/${protectedTenant}/login`;
+
+    // FIXED: Check if the incoming host already carries the subdomain prefix.
+    // If it does, bounce to a clean "/login" to prevent path segment duplication loops.
+    const currentHost = request.headers.get("host") ?? "";
+    const carriesSubdomain = currentHost.startsWith(`${protectedTenant}.`);
+
+    loginUrl.pathname = carriesSubdomain ? "/login" : `/${protectedTenant}/login`;
     loginUrl.search = "";
     return NextResponse.redirect(loginUrl);
   }

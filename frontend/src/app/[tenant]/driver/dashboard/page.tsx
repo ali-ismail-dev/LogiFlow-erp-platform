@@ -73,12 +73,14 @@ function formatTenantName(slug: string): string {
 function formatDateTime(timestamp: string | null): string {
   if (!timestamp) return "Unknown";
   try {
-    return new Intl.DateTimeFormat("en-US", {
+    // Forces the browser to convert the UTC container server time into local client machine time
+    const date = new Date(timestamp);
+    return new Intl.DateTimeFormat(navigator.language || "en-US", {
       month: "short",
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
-    }).format(new Date(timestamp));
+    }).format(date);
   } catch {
     return timestamp;
   }
@@ -94,6 +96,7 @@ export default function DriverDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filteredDispatches = useMemo(() => {
     if (!user) return [];
@@ -181,6 +184,7 @@ export default function DriverDashboardPage() {
 
     try {
       setError(null);
+      setIsSubmitting(true);
       const currentHostname = window.location.hostname;
       const currentProtocol = window.location.protocol;
       const backendBaseUrl = `${currentProtocol}//${currentHostname}:8000/api/v1`;
@@ -206,6 +210,8 @@ export default function DriverDashboardPage() {
     } catch (err: unknown) {
       console.error("[Driver Telemetry] Status update failure:", err);
       setError(err instanceof Error ? err.message : "Failed to broadcast real-time telemetry.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -335,7 +341,12 @@ export default function DriverDashboardPage() {
                 <button
                   type="button"
                   onClick={() => advanceStatus(dispatch.id, dispatch.status)}
-                  className="mt-5 w-full rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 px-4 py-3.5 text-sm font-semibold text-zinc-950 transition duration-200 hover:from-emerald-300 hover:to-emerald-400 active:scale-[0.99]"
+                  disabled={dispatch.status === "completed" || isSubmitting}
+                  className={`mt-5 w-full rounded-xl px-4 py-3.5 text-sm font-semibold transition duration-200 ${
+                    dispatch.status === "completed"
+                      ? "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50 shadow-none"
+                      : "bg-gradient-to-r from-emerald-400 to-emerald-500 text-zinc-950 hover:from-emerald-300 hover:to-emerald-400 active:scale-[0.99] shadow-xl shadow-black/10"
+                  }`}
                 >
                   {primaryButtonLabel(dispatch.status)}
                 </button>

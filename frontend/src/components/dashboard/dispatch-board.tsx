@@ -98,7 +98,7 @@ export function DispatchBoard({ initialDispatches = [], usersRoster = [] }: Disp
                 <div className="hidden flex-none text-right sm:block">
                   <p className="text-[11px] uppercase tracking-wide text-zinc-600">Departed</p>
                   <p className="font-mono text-xs tabular-nums text-zinc-400">
-                    {dispatch.departed_at ? formatTime(dispatch.departed_at, dispatch.warehouse?.timezone || "UTC") : "—"}
+                    {formatDepartedTime(dispatch.departed_at)}
                   </p>
                 </div>
 
@@ -244,6 +244,22 @@ function StopStatusBadge({ status }: { status: any }) {
       {displayLabel}
     </span>
   );
+}
+
+export function formatDepartedTime(timestampString: string | null | undefined): string {
+  if (!timestampString) return "-";
+
+  try {
+    const dateObj = new Date(timestampString);
+    const locale = typeof window !== "undefined" ? navigator.language : "en-US";
+
+    return new Intl.DateTimeFormat(locale, {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(dateObj);
+  } catch (e) {
+    return "-";
+  }
 }
 
 function formatTime(iso: string | null, timeZone: string): string {

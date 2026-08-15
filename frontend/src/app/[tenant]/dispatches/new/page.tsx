@@ -65,8 +65,11 @@ export default function NewDispatchPage() {
   const router = useRouter();
   const dashboardHref = buildTenantAwarePath("/dashboard", tenant);
 
-  const { isSuperAdmin, isDispatcher, loading: rbacLoading } = useRBAC();
+  const { isSuperAdmin, isDispatcher, isDriver, loading: rbacLoading } = useRBAC();
   const authorized = isSuperAdmin || isDispatcher;
+  const unauthorizedReturnHref = isDriver
+    ? buildTenantAwarePath("/driver/dashboard", tenant)
+    : dashboardHref;
 
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [drivers, setDrivers] = useState<DriverRecord[]>([]);
@@ -282,7 +285,7 @@ export default function NewDispatchPage() {
             Manifest compilation is restricted to authorized dispatch personnel only.
           </p>
           <Link
-            href={dashboardHref}
+            href={unauthorizedReturnHref}
             className="mt-6 inline-flex items-center justify-center rounded-xl border border-rose-400/30 bg-zinc-950/40 px-4 py-2.5 text-sm font-medium text-rose-200 transition hover:border-rose-400/50 hover:text-white"
           >
             Return to dashboard
