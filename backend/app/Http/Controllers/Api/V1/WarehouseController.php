@@ -43,8 +43,12 @@ final class WarehouseController extends Controller
             'tenant_id' => $resolvedTenant->id,
             'name' => $validated['name'],
             'code' => strtoupper($validated['code']),
-            'address' => $validated['address'],
-            'city' => $validated['city'],
+            'address' => [
+                'street' => $validated['address'],
+                'city' => $validated['city'],
+                'state' => null,
+                'zip_code' => null,
+            ],
             'is_active' => true,
         ]);
 

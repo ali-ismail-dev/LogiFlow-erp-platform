@@ -219,7 +219,6 @@ final class FleetMatrixIntegrationTest extends TestCase
                 'state' => 'OR',
                 'zip_code' => '97205',
             ],
-            'city' => 'Portland',
             'is_active' => true,
         ]);
 
