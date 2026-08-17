@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Webhooks\CarrierWebhookController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\VehicleController;
 use App\Http\Controllers\Api\V1\WarehouseController;
+use App\Http\Controllers\Api\V1\PublicRegistrationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,6 +21,10 @@ use Illuminate\Support\Facades\Route;
 // Secure public gateway endpoint for third-party inbound carrier webhooks
 Route::post('/v1/webhooks/carrier/{carrier}', CarrierWebhookController::class)
     ->name('api.v1.webhooks.carrier');
+
+// Phase 8 Public SaaS Corporate Onboarding Gate Pathway
+Route::post('/v1/public/register', [PublicRegistrationController::class, 'register'])
+    ->name('api.v1.public.register');
 
 // Public Tenant-Scoped Endpoint: Login must run before session tokens exist
 Route::middleware(['web', 'tenant'])

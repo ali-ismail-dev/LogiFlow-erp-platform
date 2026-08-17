@@ -341,9 +341,15 @@ export default function RootLandingPage() {
       </div>
 
       {/* ── Bottom subtle version info ── */}
-      <p className="absolute bottom-6 text-xs text-zinc-700">
-        LogiFlow v2.4.1 · Operations Cockpit
-      </p>
+      <div className="absolute bottom-6 text-center text-xs text-zinc-700">
+        <a
+          href="/register"
+          className="font-medium text-zinc-500 transition-colors hover:text-emerald-400"
+        >
+          Want to launch LogiFlow for your logistics company? Register a new workspace →
+        </a>
+        <p className="mt-2">LogiFlow v2.4.1 · Operations Cockpit</p>
+      </div>
     </div>
   );
 }
