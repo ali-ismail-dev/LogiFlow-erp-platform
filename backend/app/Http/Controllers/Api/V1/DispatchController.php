@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\Dispatch\ListDispatchesAction;
-use App\Enums\DispatchStatus;
 use App\Enums\OrderStatus;
 use App\Enums\StopStatus;
 use App\Http\Controllers\Controller;
@@ -47,8 +46,8 @@ final class DispatchController extends Controller
         $validated = $request->validate([
             'order_ids' => ['required', 'array'],
             'order_ids.*' => ['integer', 'exists:orders,id'],
-            'driver_id' => ['required', 'integer', 'exists:drivers,id'],
-            'vehicle_id' => ['required', 'integer', 'exists:vehicles,id'],
+            'driver_id' => ['nullable', 'integer', 'exists:drivers,id'],
+            'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
         ]);
 
         $tenantManager = app(TenantManager::class);
@@ -61,20 +60,20 @@ final class DispatchController extends Controller
         }
 
         $dispatch = DB::transaction(function () use ($validated, $resolvedTenant): Dispatch {
-            $driver = Driver::query()
-                ->whereKey($validated['driver_id'])
-                ->firstOrFail();
+            $driver = isset($validated['driver_id'])
+                ? Driver::query()->whereKey($validated['driver_id'])->firstOrFail()
+                : null;
 
-            $vehicle = Vehicle::query()
-                ->whereKey($validated['vehicle_id'])
-                ->firstOrFail();
+            $vehicle = isset($validated['vehicle_id'])
+                ? Vehicle::query()->whereKey($validated['vehicle_id'])->firstOrFail()
+                : null;
 
             $dispatch = Dispatch::query()->create([
                 'tenant_id' => $resolvedTenant->id,
-                'warehouse_id' => $driver->warehouse_id ?? $vehicle->warehouse_id ?? null,
-                'driver_name' => $driver->user?->name,
-                'vehicle_identifier' => $vehicle->license_plate,
-                'status' => DispatchStatus::Planned->value,
+                'warehouse_id' => $driver->warehouse_id ?? $vehicle?->warehouse_id ?? null,
+                'driver_name' => $driver?->user?->name ?? null,
+                'vehicle_identifier' => $vehicle?->license_plate ?? null,
+                'status' => 'planned',
                 'reference_code' => 'DISP-' . now()->format('YmdHis') . '-' . random_int(1000, 9999),
                 'scheduled_at' => now(),
             ]);
@@ -125,6 +124,53 @@ final class DispatchController extends Controller
         return response()->json([
             'data' => new DispatchResource($dispatch->load('warehouse', 'stops')),
         ], 201);
+    }
+
+    public function assignFleet(Request $request, string|int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'driver_id' => ['required', 'integer', 'exists:drivers,id'],
+            'vehicle_id' => ['required', 'integer', 'exists:vehicles,id'],
+        ]);
+
+        $tenantManager = app(TenantManager::class);
+        $resolvedTenant = $tenantManager->getTenant();
+
+        if (! $resolvedTenant) {
+            throw new NotFoundHttpException(
+                'Unable to securely resolve an active, mapped organizational workspace context.'
+            );
+        }
+
+        $dispatch = DB::transaction(function () use ($validated, $resolvedTenant, $id): Dispatch {
+            $dispatch = Dispatch::query()
+                ->where('tenant_id', $resolvedTenant->id)
+                ->where('id', $id)
+                ->firstOrFail();
+
+            $driver = Driver::query()
+                ->whereKey($validated['driver_id'])
+                ->firstOrFail();
+
+            $vehicle = Vehicle::query()
+                ->whereKey($validated['vehicle_id'])
+                ->firstOrFail();
+
+            $dispatch->update([
+                'driver_name' => $driver->user?->name,
+                'vehicle_identifier' => $vehicle->license_plate,
+                'warehouse_id' => $dispatch->warehouse_id ?? $driver->warehouse_id ?? $vehicle->warehouse_id ?? null,
+            ]);
+
+            $dispatch->load(['warehouse', 'stops', 'orders']);
+            event(new \App\Events\DispatchMovementUpdated($dispatch));
+
+            return $dispatch->fresh();
+        });
+
+        return response()->json([
+            'data' => new DispatchResource($dispatch),
+        ], 200);
     }
 
     public function updateStatus(Request $request, string|int $id): JsonResponse

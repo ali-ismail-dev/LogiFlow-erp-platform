@@ -5,6 +5,7 @@ import {
   Truck,
   Users,
   Route,
+  Package,
   Building2,
   ArrowRight,
 } from "lucide-react";
@@ -81,6 +82,30 @@ export function OperationalControlBoard({
       iconBg: "bg-amber-500/10",
       iconHoverBg: "group-hover:bg-amber-500/20",
     },
+    {
+      id: "warehouses",
+      title: "Facility Hub Portal",
+      description: "Register and monitor fulfillment facilities across the active network",
+      icon: Building2,
+      href: buildTenantAwarePath("/warehouses", tenantSlug),
+      bgGradient: "from-cyan-500/20 to-cyan-600/20",
+      borderColor: "border-cyan-700/40",
+      borderHover: "hover:border-cyan-500/60",
+      iconBg: "bg-cyan-500/10",
+      iconHoverBg: "group-hover:bg-cyan-500/20",
+    },
+    {
+      id: "order-intake",
+      title: "Cargo Order Intake",
+      description: "Manually ingest new corporate client cargo orders into the unassigned queue",
+      icon: Package,
+      href: buildTenantAwarePath("/orders/new", tenantSlug),
+      bgGradient: "from-cyan-500/20 to-cyan-600/20",
+      borderColor: "border-cyan-700/40",
+      borderHover: "hover:border-cyan-500/60",
+      iconBg: "bg-cyan-500/10",
+      iconHoverBg: "group-hover:bg-cyan-500/20",
+    },
   ];
 
   const handleNavigate = (href: string) => {
@@ -100,7 +125,7 @@ export function OperationalControlBoard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {controlItems.map((item) => {
           const IconComponent = item.icon;
 

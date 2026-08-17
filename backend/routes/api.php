@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\TenantController;
 use App\Http\Controllers\Api\V1\Webhooks\CarrierWebhookController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\VehicleController;
+use App\Http\Controllers\Api\V1\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -43,8 +44,14 @@ Route::middleware(['web', 'tenant', 'auth:sanctum'])
         // Phase 3.2 Fleet Domain endpoints — tenant-aware, auth-protected.
         Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles.index');
         Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
+        // Phase 7.1 Warehouse Domain Endpoints — tenant-aware, auth-protected
+        Route::get('/warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
+        Route::post('/warehouses', [WarehouseController::class, 'store'])->name('warehouses.store');
+        // Phase 7.2 Manual Cargo Ingestion Endpoint — tenant-aware, auth-protected
+        Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
         // Manifest creation must occur inside the authenticated tenant workspace.
         Route::post('/dispatches', [DispatchController::class, 'store'])->name('dispatches.store');
+        Route::put('/dispatches/{dispatch}/assign', [DispatchController::class, 'assignFleet'])->name('dispatches.fleet.assign');
         Route::patch('/dispatches/{dispatch}/status', [DispatchController::class, 'updateStatus'])
             ->name('dispatches.status.update');
     });

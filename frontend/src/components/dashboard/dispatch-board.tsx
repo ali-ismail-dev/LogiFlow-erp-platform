@@ -1,19 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, MapPin, Package, Truck } from "lucide-react";
 import type { Dispatch, Stop } from "@/types/logistics";
 import type { AuthUser } from "@/hooks/useRBAC";
+import { getAddressLine1 } from "@/lib/address";
+import { AssignFleetModal } from "./AssignFleetModal";
 
 interface DispatchBoardProps {
   initialDispatches: Dispatch[];
+  tenantSlug?: string;
   // FIXED: The server-hydrated real tenant user roster. The dispatch board must
   // resolve the displayed driver from the database (driver-role rows only) rather
   // than trusting a stale `driver_name` string embedded on the manifest cache.
   usersRoster?: AuthUser[];
 }
 
-export function DispatchBoard({ initialDispatches = [], usersRoster = [] }: DispatchBoardProps) {
+export function DispatchBoard({ initialDispatches = [], tenantSlug = "", usersRoster = [] }: DispatchBoardProps) {
+  const [dispatches, setDispatches] = useState<Dispatch[]>(initialDispatches);
+  const [fleetAssignmentTarget, setFleetAssignmentTarget] = useState<Dispatch | null>(null);
+  useEffect(() => {
+    setDispatches(initialDispatches);
+  }, [initialDispatches]);
+
   const [expanded, setExpanded] = useState<Set<string>>(
     () =>
       new Set(
@@ -59,77 +68,118 @@ export function DispatchBoard({ initialDispatches = [], usersRoster = [] }: Disp
     });
   }
 
+  const handleAssignmentComplete = (payload: { id: string | number; driver_name: string | null; vehicle_identifier: string | null }) => {
+    setDispatches((current) =>
+      current.map((dispatch) =>
+        String(dispatch.id) === String(payload.id)
+          ? {
+              ...dispatch,
+              driver_name: payload.driver_name ?? dispatch.driver_name,
+              vehicle_identifier: payload.vehicle_identifier ?? dispatch.vehicle_identifier,
+              status: dispatch.status || "planned",
+            }
+          : dispatch,
+      ),
+    );
+    setFleetAssignmentTarget(null);
+  };
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between px-1">
-        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-500">Active Dispatches</p>
-        <p className="font-mono text-[11px] text-zinc-600">{initialDispatches.length} total</p>
+    <>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-500">Active Dispatches</p>
+          <p className="font-mono text-[11px] text-zinc-600">{dispatches.length} total</p>
+        </div>
+
+        {dispatches.length === 0 ? (
+          <p className="rounded-lg border border-zinc-800/60 bg-zinc-900/50 p-4 text-xs text-zinc-500 italic text-center">
+            No dispatch runs initialized in the database yet.
+          </p>
+        ) : (
+          dispatches.map((dispatch) => {
+            const isExpanded = expanded.has(dispatch.id);
+            const missingFleetAssignment = !dispatch.driver_name || !dispatch.vehicle_identifier;
+
+            return (
+              <div key={dispatch.id} className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/50">
+                <button
+                  onClick={() => toggle(dispatch.id)}
+                  className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-zinc-900/80"
+                >
+                  <div className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-zinc-800/80">
+                    <Truck className="h-4 w-4 text-zinc-400" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-medium text-zinc-100">{dispatch.reference_code || "UNTITLED"}</span>
+                      <DispatchStatusBadge status={dispatch.status} />
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-zinc-500">
+                      {resolveDriverName(dispatch.driver_name)} · <span className="font-mono">{dispatch.vehicle_identifier || "N/A"}</span> ·{" "}
+                      {dispatch.warehouse?.name || "Hub Node"}
+                    </p>
+                  </div>
+
+                  <div className="hidden flex-none text-right sm:block">
+                    <p className="text-[11px] uppercase tracking-wide text-zinc-600">Departed</p>
+                    <p className="font-mono text-xs tabular-nums text-zinc-400">
+                      {formatDepartedTime(dispatch.departed_at)}
+                    </p>
+                  </div>
+
+                  <ChevronDown
+                    className={`h-4 w-4 flex-none text-zinc-600 transition-transform duration-200 ${
+                      isExpanded ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {missingFleetAssignment && (
+                  <div className="border-t border-zinc-800/60 bg-zinc-950/40 px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setFleetAssignmentTarget(dispatch)}
+                      className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300 transition hover:border-amber-400/50 hover:bg-amber-500/15"
+                    >
+                      Assign fleet
+                    </button>
+                  </div>
+                )}
+
+                {isExpanded && (
+                  <div className="border-t border-zinc-800/60 bg-zinc-950/40 px-5 py-4">
+                    {(!dispatch.stops || dispatch.stops.length === 0) ? (
+                      <p className="text-xs text-zinc-500 italic">No dropoff stops mapped to this manifest run.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {dispatch.stops
+                          .slice()
+                          .sort((a, b) => a.sequence - b.sequence)
+                          .map((stop) => (
+                            <StopCard key={stop.id} stop={stop} timeZone={dispatch.warehouse?.timezone || "UTC"} />
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
 
-      {initialDispatches.length === 0 ? (
-        <p className="rounded-lg border border-zinc-800/60 bg-zinc-900/50 p-4 text-xs text-zinc-500 italic text-center">
-          No dispatch runs initialized in the database yet.
-        </p>
-      ) : (
-        initialDispatches.map((dispatch) => {
-          const isExpanded = expanded.has(dispatch.id);
-
-          return (
-            <div key={dispatch.id} className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/50">
-              <button
-                onClick={() => toggle(dispatch.id)}
-                className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-zinc-900/80"
-              >
-                <div className="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-zinc-800/80">
-                  <Truck className="h-4 w-4 text-zinc-400" />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-medium text-zinc-100">{dispatch.reference_code || "UNTITLED"}</span>
-                    <DispatchStatusBadge status={dispatch.status} />
-                  </div>
-<p className="mt-0.5 truncate text-xs text-zinc-500">
-                    {resolveDriverName(dispatch.driver_name)} · <span className="font-mono">{dispatch.vehicle_identifier || "N/A"}</span> ·{" "}
-                    {dispatch.warehouse?.name || "Hub Node"}
-                  </p>
-                </div>
-
-                <div className="hidden flex-none text-right sm:block">
-                  <p className="text-[11px] uppercase tracking-wide text-zinc-600">Departed</p>
-                  <p className="font-mono text-xs tabular-nums text-zinc-400">
-                    {formatDepartedTime(dispatch.departed_at)}
-                  </p>
-                </div>
-
-                <ChevronDown
-                  className={`h-4 w-4 flex-none text-zinc-600 transition-transform duration-200 ${
-                    isExpanded ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {isExpanded && (
-                <div className="border-t border-zinc-800/60 bg-zinc-950/40 px-5 py-4">
-                  {(!dispatch.stops || dispatch.stops.length === 0) ? (
-                    <p className="text-xs text-zinc-500 italic">No dropoff stops mapped to this manifest run.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {dispatch.stops
-                        .slice()
-                        .sort((a, b) => a.sequence - b.sequence)
-                        .map((stop) => (
-                          <StopCard key={stop.id} stop={stop} timeZone={dispatch.warehouse?.timezone || "UTC"} />
-                        ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })
+      {fleetAssignmentTarget && (
+        <AssignFleetModal
+          isOpen={Boolean(fleetAssignmentTarget)}
+          tenantSlug={tenantSlug}
+          dispatchId={fleetAssignmentTarget.id}
+          onClose={() => setFleetAssignmentTarget(null)}
+          onAssigned={handleAssignmentComplete}
+        />
       )}
-    </div>
+    </>
   );
 }
 
@@ -138,7 +188,7 @@ function StopCard({ stop, timeZone }: { stop: Stop; timeZone: string }) {
     ? stop.destination_address as Record<string, unknown>
     : null;
 
-  const addressLine1 = typeof destinationAddress?.line1 === "string" ? destinationAddress.line1 : "";
+  const addressLine1 = getAddressLine1(destinationAddress);
   const addressCity = typeof destinationAddress?.city === "string" ? destinationAddress.city : "";
   const addressState = typeof destinationAddress?.state === "string" ? destinationAddress.state : "";
 

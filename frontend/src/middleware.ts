@@ -33,6 +33,8 @@ const PROTECTED_SEGMENTS: ReadonlySet<string> = new Set([
   "employees",
   "drivers",
   "vehicles",
+  "warehouses",
+  "orders",
   "driver",
 ]);
 

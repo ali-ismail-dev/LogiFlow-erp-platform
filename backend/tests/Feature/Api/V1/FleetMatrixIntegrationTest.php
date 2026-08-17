@@ -194,4 +194,63 @@ final class FleetMatrixIntegrationTest extends TestCase
             'status' => DriverStatus::OnTrip->value,
         ]);
     }
+
+    #[Test]
+    public function test_authorized_user_can_register_order_under_active_tenant(): void
+    {
+        $tenant = Tenant::factory()->create([
+            'name' => 'Nike Logistics',
+            'slug' => 'nike',
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => UserRole::SuperAdmin,
+        ]);
+
+        $warehouse = \App\Models\Warehouse::factory()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Nike Central Hub',
+            'code' => 'NKE-01',
+            'address' => [
+                'street' => '101 Main St',
+                'city' => 'Portland',
+                'state' => 'OR',
+                'zip_code' => '97205',
+            ],
+            'city' => 'Portland',
+            'is_active' => true,
+        ]);
+
+        $payload = [
+            'warehouse_id' => $warehouse->id,
+            'order_number' => 'NKE-ORD-1001',
+            'customer_name' => 'Apex Retail Group',
+            'total_weight_kg' => 245.50,
+            'shipping_address' => [
+                'street' => '600 Harbor Ave',
+                'city' => 'Seattle',
+            ],
+            'status' => 'pending',
+        ];
+
+        $response = $this->actingAs($user)
+            ->postJson('/api/v1/orders', $payload, ['X-Tenant-ID' => 'nike']);
+
+        $response->assertCreated();
+        $response->assertJsonPath('data.tenant_id', $tenant->id);
+        $response->assertJsonPath('data.warehouse_id', $warehouse->id);
+        $response->assertJsonPath('data.order_number', 'NKE-ORD-1001');
+        $response->assertJsonPath('data.customer_name', 'Apex Retail Group');
+        $response->assertJsonPath('data.status', 'pending');
+
+        $this->assertDatabaseHas('orders', [
+            'tenant_id' => $tenant->id,
+            'warehouse_id' => $warehouse->id,
+            'order_number' => 'NKE-ORD-1001',
+            'customer_name' => 'Apex Retail Group',
+            'status' => 'pending',
+        ]);
+    }
 }

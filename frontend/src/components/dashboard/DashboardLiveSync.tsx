@@ -252,7 +252,7 @@ export function DashboardLiveSync({
         <MetricsFeed initialMetrics={metrics} />
       </aside>
       <section className="lg:col-span-6">
-        <DispatchBoard initialDispatches={dispatches} usersRoster={usersRoster} />
+        <DispatchBoard initialDispatches={dispatches} tenantSlug={tenantSlug} usersRoster={usersRoster} />
       </section>
       <aside className="lg:col-span-3">
         <MonitoringSidebar initialEntries={auditTrailEntries} usersRoster={usersRoster} />

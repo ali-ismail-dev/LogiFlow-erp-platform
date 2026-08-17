@@ -72,11 +72,7 @@ export default function NewDispatchPage() {
     : dashboardHref;
 
   const [orders, setOrders] = useState<OrderRecord[]>([]);
-  const [drivers, setDrivers] = useState<DriverRecord[]>([]);
-  const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
-  const [driverId, setDriverId] = useState<string>("");
-  const [vehicleId, setVehicleId] = useState<string>("");
   const [isHydrating, setIsHydrating] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitState, setSubmitState] = useState<"idle" | "success">("idle");
@@ -112,40 +108,6 @@ export default function NewDispatchPage() {
     );
   }, [buildClient, tenant]);
 
-  const fetchDrivers = useCallback(async () => {
-    const client = buildClient();
-    const response = await client.get<ApiEnvelope<DriverRecord[]>>("/drivers", {
-      headers: {
-        "X-Tenant-ID": tenant,
-      },
-    });
-
-    if (response.status !== 200) {
-      throw new Error("Unable to load the driver roster.");
-    }
-
-    const payload = response.data?.data;
-    const list = normalizeList<DriverRecord>(payload as DriverRecord | DriverRecord[] | null | undefined);
-    setDrivers(list);
-  }, [buildClient, tenant]);
-
-  const fetchVehicles = useCallback(async () => {
-    const client = buildClient();
-    const response = await client.get<ApiEnvelope<VehicleRecord[]>>("/vehicles", {
-      headers: {
-        "X-Tenant-ID": tenant,
-      },
-    });
-
-    if (response.status !== 200) {
-      throw new Error("Unable to load the vehicle fleet inventory.");
-    }
-
-    const payload = response.data?.data;
-    const list = normalizeList<VehicleRecord>(payload as VehicleRecord | VehicleRecord[] | null | undefined);
-    setVehicles(list);
-  }, [buildClient, tenant]);
-
   useEffect(() => {
     if (rbacLoading || !authorized) {
       return;
@@ -158,7 +120,7 @@ export default function NewDispatchPage() {
       setErrorMessage(null);
 
       try {
-        await Promise.all([fetchOrders(), fetchDrivers(), fetchVehicles()]);
+        await fetchOrders();
       } catch (error) {
         if (!isActive) {
           return;
@@ -178,7 +140,7 @@ export default function NewDispatchPage() {
     return () => {
       isActive = false;
     };
-  }, [authorized, fetchDrivers, fetchOrders, fetchVehicles, rbacLoading]);
+  }, [authorized, fetchOrders, rbacLoading]);
 
   const selectedOrders = useMemo(
     () => orders.filter((order) => selectedOrderIds.includes(Number(order.id))),
@@ -216,16 +178,6 @@ export default function NewDispatchPage() {
         return;
       }
 
-      if (!driverId) {
-        setErrorMessage("Choose an active driver for this route manifest.");
-        return;
-      }
-
-      if (!vehicleId) {
-        setErrorMessage("Choose a vehicle assignment before submission.");
-        return;
-      }
-
       setIsSubmitting(true);
       setErrorMessage(null);
       setSubmitState("idle");
@@ -234,8 +186,6 @@ export default function NewDispatchPage() {
         const client = buildClient();
         const payload = {
           order_ids: selectedOrderIds,
-          driver_id: Number(driverId),
-          vehicle_id: Number(vehicleId),
         };
 
         const response = await client.post<DispatchCreateResponse>("/dispatches", payload, {
@@ -258,7 +208,7 @@ export default function NewDispatchPage() {
         setIsSubmitting(false);
       }
     },
-    [authorized, buildClient, driverId, router, selectedOrderIds, tenant, vehicleId],
+    [authorized, buildClient, router, selectedOrderIds, tenant],
   );
 
   if (rbacLoading) {
@@ -324,7 +274,7 @@ export default function NewDispatchPage() {
                 <path d="M5 10.5L8.2 13.7L15 6.9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            Dispatch created successfully. Redirecting to the dashboard...
+            Planned Route Manifest compiled successfully.
           </div>
         )}
 
@@ -340,7 +290,7 @@ export default function NewDispatchPage() {
         {isHydrating ? (
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-10 text-center text-zinc-300 shadow-2xl shadow-black/20">
             <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
-            Loading orders, drivers, and vehicle inventory...
+            Loading route manifest inventory...
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -454,46 +404,12 @@ export default function NewDispatchPage() {
                 </div>
 
                 <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/20 backdrop-blur-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Assignment</p>
-                  <h2 className="mt-1 text-xl font-semibold text-white">Route detail</h2>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Manifest action</p>
+                  <h2 className="mt-1 text-xl font-semibold text-white">Route composition</h2>
 
                   <div className="mt-5 space-y-4">
-                    <div>
-                      <label htmlFor="driver-select" className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                        Driver
-                      </label>
-                      <select
-                        id="driver-select"
-                        value={driverId}
-                        onChange={(event) => setDriverId(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
-                      >
-                        <option value="">Select a driver</option>
-                        {drivers.map((driver) => (
-                          <option key={String(driver.id)} value={String(driver.id)}>
-                            {driver.name || driver.email || `Driver #${driver.id}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label htmlFor="vehicle-select" className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                        Vehicle
-                      </label>
-                      <select
-                        id="vehicle-select"
-                        value={vehicleId}
-                        onChange={(event) => setVehicleId(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
-                      >
-                        <option value="">Select a vehicle</option>
-                        {vehicles.map((vehicle) => (
-                          <option key={String(vehicle.id)} value={String(vehicle.id)}>
-                            {vehicle.license_plate || vehicle.vehicle_type || `Vehicle #${vehicle.id}`}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="rounded-2xl border border-turquoise-500/20 bg-turquoise-500/5 p-3 text-sm text-zinc-300">
+                      Planned manifests are created without fleet locking. Fleet assignment is handled in the next stage from the operations dashboard.
                     </div>
 
                     <input type="hidden" name="order_ids" value={JSON.stringify(selectedOrderIds)} />
