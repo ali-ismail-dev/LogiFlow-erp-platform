@@ -196,6 +196,44 @@ final class FleetMatrixIntegrationTest extends TestCase
     }
 
     #[Test]
+    public function test_warehouse_manager_is_forbidden_from_creating_driver(): void
+    {
+        $tenant = Tenant::factory()->create([
+            'name' => 'Nike Logistics',
+            'slug' => 'nike',
+            'is_active' => true,
+        ]);
+
+        $warehouseManager = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => UserRole::WarehouseManager,
+        ]);
+
+        $driverCandidate = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'name' => 'Jordan Driver',
+            'email' => 'jordan.driver@nike.com',
+            'role' => UserRole::Driver,
+        ]);
+
+        $payload = [
+            'user_id' => $driverCandidate->id,
+            'license_number' => 'WM-403',
+            'phone_number' => '+1-555-4030',
+            'status' => DriverStatus::Active->value,
+        ];
+
+        $response = $this->actingAs($warehouseManager)
+            ->postJson('/api/v1/drivers', $payload, ['X-Tenant-ID' => 'nike']);
+
+        $response->assertForbidden();
+        $this->assertDatabaseMissing('drivers', [
+            'tenant_id' => $tenant->id,
+            'license_number' => 'WM-403',
+        ]);
+    }
+
+    #[Test]
     public function test_authorized_user_can_register_order_under_active_tenant(): void
     {
         $tenant = Tenant::factory()->create([

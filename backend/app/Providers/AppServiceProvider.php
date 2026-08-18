@@ -29,6 +29,42 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Gate::define('manage-team', function ($user): bool {
+            $role = $user?->role;
+
+            if ($role instanceof \BackedEnum) {
+                $role = $role->value;
+            }
+
+            $normalizedRole = is_string($role) ? strtolower(trim($role)) : null;
+
+            return $normalizedRole === 'super_admin';
+        });
+
+        Gate::define('manage-operations', function ($user): bool {
+            $role = $user?->role;
+
+            if ($role instanceof \BackedEnum) {
+                $role = $role->value;
+            }
+
+            $normalizedRole = is_string($role) ? strtolower(trim($role)) : null;
+
+            return in_array($normalizedRole, ['super_admin', 'dispatcher'], true);
+        });
+
+        Gate::define('manage-inventory', function ($user): bool {
+            $role = $user?->role;
+
+            if ($role instanceof \BackedEnum) {
+                $role = $role->value;
+            }
+
+            $normalizedRole = is_string($role) ? strtolower(trim($role)) : null;
+
+            return in_array($normalizedRole, ['super_admin', 'dispatcher', 'warehouse_manager'], true);
+        });
+
         Gate::policy(Dispatch::class, DispatchPolicy::class);
     }
 }

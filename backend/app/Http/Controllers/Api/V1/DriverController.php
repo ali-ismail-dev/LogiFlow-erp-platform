@@ -11,6 +11,7 @@ use App\Models\Driver;
 use App\Support\Tenancy\TenantManager;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -42,6 +43,8 @@ final class DriverController extends Controller
      */
     public function store(Request $request): DriverResource
     {
+        Gate::authorize('manage-operations');
+
         $validated = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'license_number' => ['required', 'string', 'max:50'],

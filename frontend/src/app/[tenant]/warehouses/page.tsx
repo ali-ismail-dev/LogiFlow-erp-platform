@@ -56,8 +56,8 @@ export default function FacilityHubPage() {
   const tenant = (params?.tenant as string) || "unknown";
   const dashboardHref = buildTenantAwarePath("/dashboard", tenant);
 
-  const { isSuperAdmin, isDispatcher, loading: rbacLoading } = useRBAC();
-  const authorizedManager = isSuperAdmin || isDispatcher;
+  const { isSuperAdmin, isDispatcher, isWarehouseManager, loading: rbacLoading } = useRBAC();
+  const authorizedManager = isSuperAdmin || isDispatcher || isWarehouseManager;
 
   const [warehouses, setWarehouses] = useState<WarehouseRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

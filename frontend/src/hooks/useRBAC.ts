@@ -127,15 +127,21 @@ export function useRBAC(options: UseRBACOptions = {}): UseRBACResult {
     return rules ? rules.has(role) : false;
   }, [role]);
 
+  const normalizedRole = String(user?.role ?? "").toLowerCase();
+  const isSuperAdmin = normalizedRole === "super_admin";
+  const isDispatcher = normalizedRole === "dispatcher";
+  const isWarehouseManager = String(user?.role).toLowerCase() === "warehouse_manager";
+  const isDriver = normalizedRole === "driver";
+
   return {
     user,
     role,
     loading,
     error,
-    isSuperAdmin: role === "super_admin",
-    isDispatcher: role === "dispatcher",
-    isWarehouseManager: role === "warehouse_manager",
-    isDriver: role === "driver",
+    isSuperAdmin,
+    isDispatcher,
+    isWarehouseManager,
+    isDriver,
     can,
   };
 }

@@ -111,10 +111,10 @@ jobs:
           cd frontend
           npm run lint --if-present
 
-      - name: Run Frontend Vitest Component Suites
+      - name: Execute Frontend Unit Test Suites
         run: |
           cd frontend
-          npx vitest
+          npm run test
   # ---------------------------------------------------------------------------
   # TASK 3: Continuous Production Deployment Gateway (CD)
   # ---------------------------------------------------------------------------

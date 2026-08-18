@@ -127,16 +127,7 @@ export default function EmployeesPage() {
     }
   };
 
-  if (rbacLoading || loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-sm font-mono text-zinc-400">
-        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
-        Synchronizing workspace directory logs...
-      </div>
-    );
-  }
-
-  if (!canManageTeam) {
+  if (!rbacLoading && !canManageTeam) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 p-6 text-center text-zinc-100">
         <p className="font-mono text-xs uppercase tracking-widest text-rose-500">Security Access Violation</p>
@@ -147,6 +138,15 @@ export default function EmployeesPage() {
         <Link href={dashboardHref} className="mt-5 text-xs text-emerald-400 underline hover:text-emerald-300">
           Return to Cockpit Dashboard
         </Link>
+      </div>
+    );
+  }
+
+  if (rbacLoading || loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-sm font-mono text-zinc-400">
+        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+        Synchronizing workspace directory logs...
       </div>
     );
   }

@@ -43,8 +43,8 @@ export default function NewCargoOrderPage() {
   const router = useRouter();
   const dashboardHref = buildTenantAwarePath("/dashboard", tenant);
 
-  const { isSuperAdmin, isDispatcher, loading: rbacLoading } = useRBAC();
-  const authorized = isSuperAdmin || isDispatcher;
+  const { isSuperAdmin, isDispatcher, isWarehouseManager, loading: rbacLoading } = useRBAC();
+  const authorized = isSuperAdmin || isDispatcher || isWarehouseManager;
 
   const [warehouses, setWarehouses] = useState<WarehouseRecord[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");

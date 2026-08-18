@@ -229,10 +229,10 @@ export default function NewDispatchPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/15 text-2xl text-rose-300">
             !
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300">Security exclusion</p>
-          <h1 className="mt-3 text-2xl font-semibold text-white">Access restricted</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300">Security Access Violation</p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">Unauthorized Perimeter Entry</h1>
           <p className="mt-3 text-sm text-rose-100/80">
-            Manifest compilation is restricted to authorized dispatch personnel only.
+            Manifest compilation is restricted to super administrators and dispatch personnel only.
           </p>
           <Link
             href={unauthorizedReturnHref}

@@ -9,6 +9,7 @@ import {
   Building2,
   ArrowRight,
 } from "lucide-react";
+import { useRBAC } from "@/hooks/useRBAC";
 import { buildTenantAwarePath } from "@/lib/tenant-routing";
 
 interface OperationalControlBoardProps {
@@ -32,6 +33,7 @@ export function OperationalControlBoard({
   tenantSlug,
 }: OperationalControlBoardProps) {
   const router = useRouter();
+  const { isSuperAdmin, isDispatcher, isWarehouseManager } = useRBAC();
 
   const controlItems: BoardItem[] = [
     {
@@ -108,6 +110,22 @@ export function OperationalControlBoard({
     },
   ];
 
+  const visibleControlItems = controlItems.filter((item) => {
+    if (isSuperAdmin) {
+      return true;
+    }
+
+    if (isDispatcher) {
+      return ["vehicles", "drivers", "dispatches", "order-intake", "warehouses"].includes(item.id);
+    }
+
+    if (isWarehouseManager) {
+      return ["warehouses", "order-intake"].includes(item.id);
+    }
+
+    return false;
+  });
+
   const handleNavigate = (href: string) => {
     router.push(href);
   };
@@ -126,7 +144,7 @@ export function OperationalControlBoard({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {controlItems.map((item) => {
+        {visibleControlItems.map((item) => {
           const IconComponent = item.icon;
 
           return (

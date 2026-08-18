@@ -119,6 +119,38 @@ export default function FleetVehiclesPage() {
     }
   }, [rbacLoading, authorizedManager, loadData]);
 
+  if (rbacLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-sm font-mono text-zinc-400">
+        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
+        Synchronizing fleet asset matrix...
+      </div>
+    );
+  }
+
+  if (!authorizedManager) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-6 py-10 text-zinc-50">
+        <div className="w-full max-w-xl rounded-2xl border border-rose-500/30 bg-rose-500/10 p-8 text-center shadow-2xl shadow-black/30">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/15 text-2xl text-rose-300">
+            !
+          </div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300">Security Access Violation</p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">Unauthorized Perimeter Entry</h1>
+          <p className="mt-3 text-sm text-rose-100/80">
+            Fleet equipment directory access is restricted to super administrators and dispatch personnel only.
+          </p>
+          <Link
+            href={dashboardHref}
+            className="mt-6 inline-flex items-center justify-center rounded-xl border border-rose-400/30 bg-zinc-950/40 px-4 py-2.5 text-sm font-medium text-rose-200 transition hover:border-rose-400/50 hover:text-white"
+          >
+            Return to dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // ── Modal form submission → POST /vehicles ──
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,32 +200,8 @@ export default function FleetVehiclesPage() {
     }
   };
 
-  // ── Fail-closed RBAC security exception frame ──
-  if (!rbacLoading && !authorizedManager) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-6 py-10 text-zinc-50">
-        <div className="w-full max-w-xl rounded-2xl border border-rose-500/30 bg-rose-500/10 p-8 text-center shadow-2xl shadow-black/30">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/15 text-2xl text-rose-300">
-            !
-          </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300">Security exclusion</p>
-          <h1 className="mt-3 text-2xl font-semibold text-white">Access restricted</h1>
-          <p className="mt-3 text-sm text-rose-100/80">
-            Fleet equipment directory access is restricted to authorized dispatch personnel only.
-          </p>
-          <Link
-            href={buildTenantAwarePath("/driver/dashboard", tenant)}
-            className="mt-6 inline-flex items-center justify-center rounded-xl border border-rose-400/30 bg-zinc-950/40 px-4 py-2.5 text-sm font-medium text-rose-200 transition hover:border-rose-400/50 hover:text-white"
-          >
-            Return to dashboard
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   // ── Loading splash ──
-  if (rbacLoading || loading) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-sm font-mono text-zinc-400">
         <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />

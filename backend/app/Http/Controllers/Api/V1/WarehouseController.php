@@ -9,6 +9,7 @@ use App\Models\Warehouse;
 use App\Support\Tenancy\TenantManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class WarehouseController extends Controller
@@ -25,6 +26,8 @@ final class WarehouseController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        Gate::authorize('manage-inventory');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:50'],

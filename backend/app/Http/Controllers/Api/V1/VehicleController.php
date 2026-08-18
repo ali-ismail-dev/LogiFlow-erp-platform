@@ -10,6 +10,7 @@ use App\Models\Vehicle;
 use App\Support\Tenancy\TenantManager;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class VehicleController extends Controller
@@ -35,6 +36,8 @@ final class VehicleController extends Controller
      */
     public function store(Request $request): VehicleResource
     {
+        Gate::authorize('manage-operations');
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'license_plate' => ['required', 'string', 'max:50', 'unique:vehicles,license_plate'],
