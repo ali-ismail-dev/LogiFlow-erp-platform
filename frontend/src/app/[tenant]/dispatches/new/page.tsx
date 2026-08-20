@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useRBAC } from "@/hooks/useRBAC";
@@ -59,13 +65,126 @@ function normalizeList<T>(payload: T | T[] | null | undefined): T[] {
   return payload ? [payload] : [];
 }
 
+interface ToastState {
+  open: boolean;
+  message: string;
+  type: "success" | "error";
+}
+
+function ToastNotification({
+  open,
+  message,
+  type,
+  onClose,
+}: {
+  open: boolean;
+  message: string;
+  type: "success" | "error";
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const timeoutId = window.setTimeout(() => {
+      onClose();
+    }, 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className={`fixed bottom-6 right-6 z-[100] max-w-sm rounded-xl border shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out ${
+        type === "success"
+          ? "border-emerald-500/50 bg-emerald-950/90 shadow-emerald-500/20"
+          : "border-rose-500/50 bg-rose-950/90 shadow-rose-500/20"
+      }`}
+      style={{
+        animation: "toast-in 0.3s cubic-bezier(0.21, 1.02, 0.73, 1)",
+      }}
+    >
+      <div className="flex items-start gap-3 px-4 py-3">
+        <div
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+            type === "success"
+              ? "bg-emerald-500/20 text-emerald-300"
+              : "bg-rose-500/20 text-rose-300"
+          }`}
+        >
+          {type === "success" ? (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M2 6l2.5 2.5L10 3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M3 3l6 6M9 3L3 9"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-zinc-100">
+            {type === "success" ? "Dispatch Compiled" : "Dispatch Error"}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-400">{message}</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="ml-2 text-zinc-500 transition-colors hover:text-zinc-300"
+          aria-label="Dismiss notification"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path
+              d="M3 3l8 8M11 3L3 11"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+      <style jsx>{`
+        @keyframes toast-in {
+          from {
+            opacity: 0;
+            transform: translateY(1rem) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+const PAGE_SIZE = 5;
+
 export default function NewDispatchPage() {
   const params = useParams();
   const tenant = (params?.tenant as string) || "unknown";
   const router = useRouter();
   const dashboardHref = buildTenantAwarePath("/dashboard", tenant);
 
-  const { isSuperAdmin, isDispatcher, isDriver, loading: rbacLoading } = useRBAC();
+  const {
+    isSuperAdmin,
+    isDispatcher,
+    isDriver,
+    loading: rbacLoading,
+  } = useRBAC();
   const authorized = isSuperAdmin || isDispatcher;
   const unauthorizedReturnHref = isDriver
     ? buildTenantAwarePath("/driver/dashboard", tenant)
@@ -75,12 +194,27 @@ export default function NewDispatchPage() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
   const [isHydrating, setIsHydrating] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitState, setSubmitState] = useState<"idle" | "success">("idle");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [toast, setToast] = useState<ToastState>({
+    open: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = useCallback(
+    (message: string, type: "success" | "error") => {
+      setToast({ open: true, message, type });
+    },
+    [],
+  );
+
+  const closeToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, open: false }));
+  }, []);
 
   const buildClient = useCallback(() => {
-    const currentHostname = window.location.hostname;
-    const currentProtocol = window.location.protocol;
+    const currentHostname = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    const currentProtocol = typeof window !== "undefined" ? window.location.protocol : "http:";
     const backendBaseUrl = `${currentProtocol}//${currentHostname}:8000/api/v1`;
     return createApiClient({ baseUrl: backendBaseUrl });
   }, []);
@@ -98,12 +232,19 @@ export default function NewDispatchPage() {
     }
 
     const payload = response.data?.data;
-    const list = normalizeList<OrderRecord>(payload as OrderRecord | OrderRecord[] | null | undefined);
+    const list = normalizeList<OrderRecord>(
+      payload as OrderRecord | OrderRecord[] | null | undefined,
+    );
 
     setOrders(
       list.filter((order) => {
-        const normalizedStatus = String(order?.status ?? "").trim().toLowerCase();
-        return normalizedStatus === "pending" || normalizedStatus === "unassigned";
+        const normalizedStatus = String(order?.status ?? "")
+          .trim()
+          .toLowerCase();
+        return (
+          normalizedStatus === "pending" ||
+          normalizedStatus === "unassigned"
+        );
       }),
     );
   }, [buildClient, tenant]);
@@ -117,16 +258,20 @@ export default function NewDispatchPage() {
 
     const hydrateManifestData = async () => {
       setIsHydrating(true);
-      setErrorMessage(null);
+      setToast((prev) => ({ ...prev, open: false }));
 
       try {
         await fetchOrders();
+        setCurrentPage(1);
       } catch (error) {
         if (!isActive) {
           return;
         }
-        setErrorMessage(
-          error instanceof Error ? error.message : "Failed to synchronize the manifest inventory.",
+        showToast(
+          error instanceof Error
+            ? error.message
+            : "Failed to synchronize the manifest inventory.",
+          "error",
         );
       } finally {
         if (isActive) {
@@ -140,10 +285,11 @@ export default function NewDispatchPage() {
     return () => {
       isActive = false;
     };
-  }, [authorized, fetchOrders, rbacLoading]);
+  }, [authorized, fetchOrders, rbacLoading, showToast]);
 
   const selectedOrders = useMemo(
-    () => orders.filter((order) => selectedOrderIds.includes(Number(order.id))),
+    () =>
+      orders.filter((order) => selectedOrderIds.includes(Number(order.id))),
     [orders, selectedOrderIds],
   );
 
@@ -156,6 +302,12 @@ export default function NewDispatchPage() {
     [selectedOrders],
   );
 
+  const totalPages = Math.max(1, Math.ceil(orders.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
+  const endIndex = startIndex + PAGE_SIZE;
+  const visibleOrders = orders.slice(startIndex, endIndex);
+
   const handleToggleOrder = useCallback((orderId: number) => {
     setSelectedOrderIds((current) =>
       current.includes(orderId)
@@ -164,23 +316,35 @@ export default function NewDispatchPage() {
     );
   }, []);
 
+  const goToPage = useCallback(
+    (page: number) => {
+      setCurrentPage(Math.min(Math.max(1, page), totalPages));
+    },
+    [totalPages],
+  );
+
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
 
       if (!authorized) {
-        setErrorMessage("You do not have permission to compile dispatch manifests.");
+        showToast(
+          "You do not have permission to compile dispatch manifests.",
+          "error",
+        );
         return;
       }
 
       if (selectedOrderIds.length === 0) {
-        setErrorMessage("Select at least one order line to build a route manifest.");
+        showToast(
+          "Select at least one order line to build a route manifest.",
+          "error",
+        );
         return;
       }
 
       setIsSubmitting(true);
-      setErrorMessage(null);
-      setSubmitState("idle");
+      setToast((prev) => ({ ...prev, open: false }));
 
       try {
         const client = buildClient();
@@ -188,27 +352,34 @@ export default function NewDispatchPage() {
           order_ids: selectedOrderIds,
         };
 
-        const response = await client.post<DispatchCreateResponse>("/dispatches", payload, {
-          headers: {
-            "X-Tenant-ID": tenant,
+        const response = await client.post<DispatchCreateResponse>(
+          "/dispatches",
+          payload,
+          {
+            headers: {
+              "X-Tenant-ID": tenant,
+            },
           },
-        });
+        );
 
         if (response.status < 200 || response.status >= 300) {
           throw new Error("The backend rejected this dispatch manifest.");
         }
 
-        setSubmitState("success");
+        showToast(
+          "Planned Route Manifest compiled successfully. Redirecting to operations dashboard...",
+          "success",
+        );
         setTimeout(() => {
           router.push(buildTenantAwarePath("/dashboard", tenant));
         }, 1600);
       } catch (error) {
-        setErrorMessage(resolveErrorMessage(error));
+        showToast(resolveErrorMessage(error), "error");
       } finally {
         setIsSubmitting(false);
       }
     },
-    [authorized, buildClient, router, selectedOrderIds, tenant],
+    [authorized, buildClient, router, selectedOrderIds, showToast, tenant],
   );
 
   if (rbacLoading) {
@@ -229,10 +400,15 @@ export default function NewDispatchPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/15 text-2xl text-rose-300">
             !
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300">Security Access Violation</p>
-          <h1 className="mt-3 text-2xl font-semibold text-white">Unauthorized Perimeter Entry</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300">
+            Security Access Violation
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">
+            Unauthorized Perimeter Entry
+          </h1>
           <p className="mt-3 text-sm text-rose-100/80">
-            Manifest compilation is restricted to super administrators and dispatch personnel only.
+            Manifest compilation is restricted to super administrators and
+            dispatch personnel only.
           </p>
           <Link
             href={unauthorizedReturnHref}
@@ -250,7 +426,10 @@ export default function NewDispatchPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <Link href={dashboardHref} className="inline-flex items-center gap-2 text-xs text-zinc-400 transition hover:text-zinc-200">
+            <Link
+              href={dashboardHref}
+              className="inline-flex items-center gap-2 text-xs text-zinc-400 transition hover:text-zinc-200"
+            >
               <span aria-hidden="true">←</span>
               Back to dashboard
             </Link>
@@ -259,33 +438,15 @@ export default function NewDispatchPage() {
               <span className="px-2 text-zinc-700">•</span>
               Dispatch manifest builder
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">Create route manifest</h1>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
+              Create route manifest
+            </h1>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300">
             <span className="h-2 w-2 rounded-full bg-emerald-400" />
             Manifest ready
           </div>
         </div>
-
-        {submitState === "success" && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300 shadow-lg shadow-emerald-900/10">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20">
-              <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
-                <path d="M5 10.5L8.2 13.7L15 6.9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            Planned Route Manifest compiled successfully.
-          </div>
-        )}
-
-        {errorMessage && (
-          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-            <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-rose-400/30 bg-rose-500/15 text-xs font-semibold text-rose-300">
-              !
-            </div>
-            <span>{errorMessage}</span>
-          </div>
-        )}
 
         {isHydrating ? (
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-10 text-center text-zinc-300 shadow-2xl shadow-black/20">
@@ -298,8 +459,12 @@ export default function NewDispatchPage() {
               <section className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/20 backdrop-blur-sm">
                 <div className="mb-5 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Available orders</p>
-                    <h2 className="mt-1 text-xl font-semibold text-white">Unassigned queue</h2>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                      Available orders
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold text-white">
+                      Unassigned queue
+                    </h2>
                   </div>
                   <span className="rounded-full border border-zinc-700 bg-zinc-950/80 px-2.5 py-1 text-xs font-medium text-zinc-400">
                     {orders.length} records
@@ -308,94 +473,173 @@ export default function NewDispatchPage() {
 
                 {orders.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-zinc-700 bg-zinc-950/40 p-8 text-center text-sm text-zinc-400">
-                    No pending or unassigned orders are available for route compilation.
+                    No pending or unassigned orders are available for route
+                    compilation.
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/50">
-                    <div className="max-h-[560px] overflow-auto">
-                      <table className="min-w-full text-left text-sm">
-                        <thead className="sticky top-0 z-10 bg-zinc-900/95 text-zinc-400 backdrop-blur">
-                          <tr>
-                            <th className="px-4 py-3 font-medium">
-                              <span className="sr-only">Select</span>
-                            </th>
-                            <th className="px-4 py-3 font-medium">Order</th>
-                            <th className="px-4 py-3 font-medium">Customer</th>
-                            <th className="px-4 py-3 font-medium">Status</th>
-                            <th className="px-4 py-3 font-medium text-right">Weight</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {orders.map((order) => {
-                            const orderId = Number(order.id);
-                            const isSelected = selectedOrderIds.includes(orderId);
-                            const weightValue = Number(order.total_weight_kg ?? 0);
+                  <>
+                    <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/50">
+                      <div className="max-h-[560px] overflow-auto">
+                        <table className="min-w-full text-left text-sm">
+                          <thead className="sticky top-0 z-10 bg-zinc-900/95 text-zinc-400 backdrop-blur">
+                            <tr>
+                              <th className="px-4 py-3 font-medium">
+                                <span className="sr-only">Select</span>
+                              </th>
+                              <th className="px-4 py-3 font-medium">Order</th>
+                              <th className="px-4 py-3 font-medium">
+                                Customer
+                              </th>
+                              <th className="px-4 py-3 font-medium">Status</th>
+                              <th className="px-4 py-3 font-medium text-right">
+                                Weight
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {visibleOrders.map((order) => {
+                              const orderId = Number(order.id);
+                              const isSelected =
+                                selectedOrderIds.includes(orderId);
+                              const weightValue = Number(
+                                order.total_weight_kg ?? 0,
+                              );
 
-                            return (
-                              <tr
-                                key={String(order.id)}
-                                className={`border-t border-zinc-800 transition ${
-                                  isSelected ? "bg-emerald-500/5" : "bg-transparent hover:bg-zinc-900/80"
-                                }`}
-                              >
-                                <td className="px-4 py-3">
-                                  <label className="inline-flex cursor-pointer items-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => handleToggleOrder(orderId)}
-                                      className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-emerald-500 focus:ring-emerald-500"
-                                    />
-                                    <span className="sr-only">Select order {order.order_number ?? order.id}</span>
-                                  </label>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <div className="font-medium text-white">{order.order_number ?? `ORD-${order.id}`}</div>
-                                </td>
-                                <td className="px-4 py-3 text-zinc-300">{order.customer_name ?? "Unknown customer"}</td>
-                                <td className="px-4 py-3">
-                                  <span className="inline-flex rounded-full border border-zinc-700 bg-zinc-950/80 px-2 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-300">
-                                    {String(order.status ?? "pending").toLowerCase()}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-right font-medium text-zinc-200">
-                                  {Number.isFinite(weightValue) ? `${weightValue.toFixed(1)} kg` : "0.0 kg"}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                              return (
+                                <tr
+                                  key={String(order.id)}
+                                  className={`border-t border-zinc-800 transition ${
+                                    isSelected
+                                      ? "bg-emerald-500/5"
+                                      : "bg-transparent hover:bg-zinc-900/80"
+                                  }`}
+                                >
+                                  <td className="px-4 py-3">
+                                    <label className="inline-flex cursor-pointer items-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() =>
+                                          handleToggleOrder(orderId)
+                                        }
+                                        className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-emerald-500 focus:ring-emerald-500"
+                                      />
+                                      <span className="sr-only">
+                                        Select order{" "}
+                                        {order.order_number ?? order.id}
+                                      </span>
+                                    </label>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="font-medium text-white">
+                                      {order.order_number ??
+                                        `ORD-${order.id}`}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-zinc-300">
+                                    {order.customer_name ?? "Unknown customer"}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className="inline-flex rounded-full border border-zinc-700 bg-zinc-950/80 px-2 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-300">
+                                      {String(
+                                        order.status ?? "pending",
+                                      ).toLowerCase()}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-medium text-zinc-200">
+                                    {Number.isFinite(weightValue)
+                                      ? `${weightValue.toFixed(1)} kg`
+                                      : "0.0 kg"}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Pagination control bar */}
+                    <div className="bg-zinc-950/40 border border-zinc-800/80 rounded-xl p-3 flex items-center justify-between text-xs mt-4">
+                      <span className="text-zinc-500">
+                        Viewing page{" "}
+                        <span className="font-mono text-zinc-300">
+                          {safeCurrentPage}
+                        </span>{" "}
+                        of{" "}
+                        <span className="font-mono text-zinc-300">
+                          {totalPages}
+                        </span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => goToPage(safeCurrentPage - 1)}
+                          disabled={safeCurrentPage <= 1}
+                          className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-800 disabled:hover:text-zinc-300"
+                        >
+                          Prev
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => goToPage(safeCurrentPage + 1)}
+                          disabled={safeCurrentPage >= totalPages}
+                          className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-800 disabled:hover:text-zinc-300"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </section>
 
               <aside className="space-y-6">
                 <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/20 backdrop-blur-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Manifest totals</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                    Manifest totals
+                  </p>
 
                   <div className="mt-4 space-y-4">
                     <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">Total selected weight</div>
-                      <div className="mt-2 text-2xl font-semibold text-white">{totalSelectedWeightKg.toFixed(1)} kg</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+                        Total selected weight
+                      </div>
+                      <div className="mt-2 text-2xl font-semibold text-white">
+                        {totalSelectedWeightKg.toFixed(1)} kg
+                      </div>
                     </div>
                     <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-300">Selected order count</div>
-                      <div className="mt-2 text-2xl font-semibold text-white">{selectedOrderIds.length}</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-300">
+                        Selected order count
+                      </div>
+                      <div className="mt-2 text-2xl font-semibold text-white">
+                        {selectedOrderIds.length}
+                      </div>
                     </div>
                   </div>
 
                   <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Included orders</div>
+                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                      Included orders
+                    </div>
                     {selectedOrders.length === 0 ? (
-                      <p className="text-sm text-zinc-400">No orders selected yet.</p>
+                      <p className="text-sm text-zinc-400">
+                        No orders selected yet.
+                      </p>
                     ) : (
                       <ul className="space-y-2 text-sm text-zinc-300">
                         {selectedOrders.map((order) => (
-                          <li key={String(order.id)} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2.5 py-2">
-                            <span>{order.order_number ?? `ORD-${order.id}`}</span>
-                            <span className="text-xs text-zinc-400">{Number(order.total_weight_kg ?? 0).toFixed(1)} kg</span>
+                          <li
+                            key={String(order.id)}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 px-2.5 py-2"
+                          >
+                            <span>
+                              {order.order_number ?? `ORD-${order.id}`}
+                            </span>
+                            <span className="text-xs text-zinc-400">
+                              {Number(order.total_weight_kg ?? 0).toFixed(1)} kg
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -404,21 +648,62 @@ export default function NewDispatchPage() {
                 </div>
 
                 <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/20 backdrop-blur-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Manifest action</p>
-                  <h2 className="mt-1 text-xl font-semibold text-white">Route composition</h2>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                    Manifest action
+                  </p>
+                  <h2 className="mt-1 text-xl font-semibold text-white">
+                    Route composition
+                  </h2>
 
                   <div className="mt-5 space-y-4">
-                    <div className="rounded-2xl border border-turquoise-500/20 bg-turquoise-500/5 p-3 text-sm text-zinc-300">
-                      Planned manifests are created without fleet locking. Fleet assignment is handled in the next stage from the operations dashboard.
+                    <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-sm text-zinc-300">
+                      Planned manifests are created without fleet locking.
+                      Fleet assignment is handled in the next stage from the
+                      operations dashboard.
                     </div>
 
-                    <input type="hidden" name="order_ids" value={JSON.stringify(selectedOrderIds)} />
+                    <input
+                      type="hidden"
+                      name="order_ids"
+                      value={JSON.stringify(selectedOrderIds)}
+                    />
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="mt-2 flex w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/50"
+                      className="group relative mt-2 flex w-full items-center justify-center overflow-hidden rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/50"
                     >
-                      {isSubmitting ? "Submitting manifest..." : "Compile manifest"}
+                      <span className="relative z-10 flex items-center gap-3">
+                        {isSubmitting ? (
+                          <>
+                            <svg
+                              className="h-5 w-5 animate-spin"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              aria-hidden="true"
+                            >
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                              />
+                            </svg>
+                            Compiling cluster manifest nodes...
+                          </>
+                        ) : (
+                          "Compile manifest"
+                        )}
+                      </span>
+                      {!isSubmitting && (
+                        <div className="absolute inset-0 -translate-x-full skew-x-12 bg-white/10 transition-transform duration-700 group-hover:translate-x-full" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -427,6 +712,13 @@ export default function NewDispatchPage() {
           </form>
         )}
       </div>
+
+      <ToastNotification
+        open={toast.open}
+        message={toast.message}
+        type={toast.type}
+        onClose={closeToast}
+      />
     </div>
   );
 }

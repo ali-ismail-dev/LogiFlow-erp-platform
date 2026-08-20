@@ -47,6 +47,8 @@ export function resolveTenantSlug(hostname: string): string | null {
 export interface ApiClientConfig {
   /** Override base URL (default: derived from window.location). */
   baseUrl?: string;
+  /** Override the tenant resolved from the browser hostname for path-based tenant routes. */
+  tenant?: string;
   /** Timeout in milliseconds (default: 15000). */
   timeout?: number;
 }
@@ -97,7 +99,7 @@ export class ApiClient {
   private readonly tenantSlug: string;
 
   constructor(config?: ApiClientConfig) {
-    const slug = resolveTenantSlug(window.location.hostname);
+    const slug = config?.tenant?.trim() || resolveTenantSlug(window.location.hostname);
     if (!slug) {
       throw new TenantContextNotResolvedError(
         `Could not resolve tenant slug from hostname "${window.location.hostname}". ` +

@@ -133,7 +133,7 @@ export function LogoutButton() {
         disabled={isLoggingOut}
         aria-label="Log out of this workspace"
         title="Terminate session and return to login"
-        className="group inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-zinc-900/70 px-4 py-2 text-xs font-semibold tracking-wide text-rose-400 transition-all duration-200 hover:border-rose-500/60 hover:bg-rose-500/10 hover:text-rose-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50 disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3.5 py-2 text-xs font-medium text-zinc-400 transition-all duration-200 hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
       >
         {isLoggingOut ? (
           <>
@@ -157,7 +157,7 @@ export function LogoutButton() {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
               />
             </svg>
-            <span>Terminating...</span>
+            <span>Destroying session profile...</span>
           </>
         ) : (
           <>
@@ -175,7 +175,7 @@ export function LogoutButton() {
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span>Log Out</span>
+            <span>Sign Out</span>
           </>
         )}
       </button>

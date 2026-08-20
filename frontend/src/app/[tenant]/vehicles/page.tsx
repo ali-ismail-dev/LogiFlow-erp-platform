@@ -48,6 +48,114 @@ function statusTone(isActive: boolean): string {
   return "border-amber-500/20 bg-amber-500/10 text-amber-400";
 }
 
+interface ToastState {
+  open: boolean;
+  message: string;
+  type: "success" | "error";
+}
+
+function ToastNotification({
+  open,
+  message,
+  type,
+  onClose,
+}: {
+  open: boolean;
+  message: string;
+  type: "success" | "error";
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const timeoutId = window.setTimeout(() => {
+      onClose();
+    }, 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className={`fixed bottom-6 right-6 z-[100] max-w-sm rounded-xl border shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out ${
+        type === "success"
+          ? "border-emerald-500/50 bg-emerald-950/90 shadow-emerald-500/20"
+          : "border-rose-500/50 bg-rose-950/90 shadow-rose-500/20"
+      }`}
+      style={{
+        animation: "toast-in 0.3s cubic-bezier(0.21, 1.02, 0.73, 1)",
+      }}
+    >
+      <div className="flex items-start gap-3 px-4 py-3">
+        <div
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+            type === "success"
+              ? "bg-emerald-500/20 text-emerald-300"
+              : "bg-rose-500/20 text-rose-300"
+          }`}
+        >
+          {type === "success" ? (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M2 6l2.5 2.5L10 3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M3 3l6 6M9 3L3 9"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-zinc-100">
+            {type === "success" ? "Fleet Updated" : "Fleet Error"}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-400">{message}</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="ml-2 text-zinc-500 transition-colors hover:text-zinc-300"
+          aria-label="Dismiss notification"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path
+              d="M3 3l8 8M11 3L3 11"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+      <style jsx>{`
+        @keyframes toast-in {
+          from {
+            opacity: 0;
+            transform: translateY(1rem) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+const PAGE_SIZE = 5;
+
 export default function FleetVehiclesPage() {
   const params = useParams();
   const tenant = (params?.tenant as string) || "unknown";
@@ -60,7 +168,7 @@ export default function FleetVehiclesPage() {
   // ── Local data stream ──
   const [vehicles, setVehicles] = useState<VehicleAsset[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // ── Registration modal state ──
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -69,12 +177,28 @@ export default function FleetVehiclesPage() {
   const [formMaxWeight, setFormMaxWeight] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [formSuccess, setFormSuccess] = useState<boolean>(false);
-  const [formError, setFormError] = useState<string | null>(null);
+
+  const [toast, setToast] = useState<ToastState>({
+    open: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = useCallback(
+    (message: string, type: "success" | "error") => {
+      setToast({ open: true, message, type });
+    },
+    [],
+  );
+
+  const closeToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, open: false }));
+  }, []);
 
   // ── Tenant-aware gateway base URL (port-8000 proxy) ──
   const buildClient = useCallback(() => {
-    const currentHostname = window.location.hostname;
-    const currentProtocol = window.location.protocol;
+    const currentHostname = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    const currentProtocol = typeof window !== "undefined" ? window.location.protocol : "http:";
     const backendBaseUrl = `${currentProtocol}//${currentHostname}:8000/api/v1`;
     return createApiClient({ baseUrl: backendBaseUrl });
   }, []);
@@ -89,6 +213,7 @@ export default function FleetVehiclesPage() {
       if (response.status === 200 && response.data?.data) {
         const payload = response.data.data;
         setVehicles(Array.isArray(payload) ? payload : [payload]);
+        setCurrentPage(1);
       } else {
         throw new Error("Failed to parse fleet asset records.");
       }
@@ -101,23 +226,38 @@ export default function FleetVehiclesPage() {
   // ── State hydration pipeline ──
   const loadData = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       await fetchVehicles();
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to synchronize fleet asset directory.",
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Failed to synchronize fleet asset directory.",
+        "error",
       );
     } finally {
       setLoading(false);
     }
-  }, [fetchVehicles]);
+  }, [fetchVehicles, showToast]);
 
   useEffect(() => {
     if (!rbacLoading && authorizedManager) {
       loadData();
     }
   }, [rbacLoading, authorizedManager, loadData]);
+
+  const totalPages = Math.max(1, Math.ceil(vehicles.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
+  const endIndex = startIndex + PAGE_SIZE;
+  const visibleVehicles = vehicles.slice(startIndex, endIndex);
+
+  const goToPage = useCallback(
+    (page: number) => {
+      setCurrentPage(Math.min(Math.max(1, page), totalPages));
+    },
+    [totalPages],
+  );
 
   if (rbacLoading) {
     return (
@@ -135,10 +275,15 @@ export default function FleetVehiclesPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/15 text-2xl text-rose-300">
             !
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300">Security Access Violation</p>
-          <h1 className="mt-3 text-2xl font-semibold text-white">Unauthorized Perimeter Entry</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300">
+            Security Access Violation
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-white">
+            Unauthorized Perimeter Entry
+          </h1>
           <p className="mt-3 text-sm text-rose-100/80">
-            Fleet equipment directory access is restricted to super administrators and dispatch personnel only.
+            Fleet equipment directory access is restricted to super
+            administrators and dispatch personnel only.
           </p>
           <Link
             href={dashboardHref}
@@ -157,7 +302,6 @@ export default function FleetVehiclesPage() {
     if (isSubmitting) return;
 
     setIsSubmitting(true);
-    setFormError(null);
     setFormSuccess(false);
 
     try {
@@ -182,6 +326,8 @@ export default function FleetVehiclesPage() {
         // Refresh the local data state array after successful registration.
         await loadData();
 
+        showToast("Fleet vehicle registered successfully.", "success");
+
         // Animated checkmark confirmation badge, then smooth auto-dismiss.
         setTimeout(() => {
           setIsModalOpen(false);
@@ -192,20 +338,41 @@ export default function FleetVehiclesPage() {
       }
     } catch (err: unknown) {
       console.error("[Fleet Matrix] Register mutation crash:", err);
-      setFormError(
-        err instanceof Error ? err.message : "Failed to register the fleet asset.",
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Failed to register the fleet asset.",
+        "error",
       );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ── Loading splash ──
+  // ── Loading splash with skeleton ──
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-sm font-mono text-zinc-400">
-        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-400" />
-        Synchronizing fleet asset matrix...
+      <div className="relative min-h-screen overflow-hidden bg-zinc-950 px-6 py-10 text-zinc-100 lg:px-12">
+        <div className="relative z-10 mx-auto max-w-6xl">
+          <div className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-zinc-900 pb-6">
+            <div className="space-y-3">
+              <div className="h-4 w-28 animate-pulse rounded-xl bg-zinc-900/40" />
+              <div className="h-8 w-72 animate-pulse rounded-xl bg-zinc-900/40" />
+              <div className="h-4 w-96 animate-pulse rounded-xl bg-zinc-900/40" />
+            </div>
+            <div className="h-10 w-40 animate-pulse rounded-xl bg-zinc-900/40" />
+          </div>
+          <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/20">
+            <div className="space-y-3 p-6">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="h-10 w-full animate-pulse rounded-xl bg-zinc-900/40"
+                />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -244,7 +411,8 @@ export default function FleetVehiclesPage() {
               Fleet Equipment Directory
             </h1>
             <p className="text-xs text-zinc-500">
-              Audit and register fleet equipment assets across the {tenant} workspace perimeter.
+              Audit and register fleet equipment assets across the {tenant}{" "}
+              workspace perimeter.
             </p>
           </div>
           <button
@@ -254,13 +422,6 @@ export default function FleetVehiclesPage() {
             + Register Fleet Vehicle
           </button>
         </div>
-
-        {/* ── Error banner ── */}
-        {error && (
-          <div className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/5 px-4 py-3 font-mono text-xs text-rose-400">
-            {error}
-          </div>
-        )}
 
         {/* ── Vehicles matrix table ── */}
         <div className="overflow-hidden rounded-xl border border-zinc-900 bg-zinc-900/20 backdrop-blur-xl">
@@ -274,24 +435,35 @@ export default function FleetVehiclesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-900 text-sm">
-              {vehicles.length === 0 ? (
+              {visibleVehicles.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-10 text-center font-mono text-xs text-zinc-500">
+                  <td
+                    colSpan={4}
+                    className="px-6 py-10 text-center font-mono text-xs text-zinc-500"
+                  >
                     No fleet vehicles registered for this tenant yet.
                   </td>
                 </tr>
               ) : (
-                vehicles.map((vehicle) => (
-                  <tr key={vehicle.id} className="transition-colors hover:bg-zinc-900/30">
-                    <td className="px-6 py-4 font-medium text-zinc-200">{vehicle.name}</td>
+                visibleVehicles.map((vehicle) => (
+                  <tr
+                    key={vehicle.id}
+                    className="transition-colors hover:bg-zinc-900/30"
+                  >
+                    <td className="px-6 py-4 font-medium text-zinc-200">
+                      {vehicle.name}
+                    </td>
                     <td className="px-6 py-4 font-mono text-xs text-zinc-400">
                       {vehicle.license_plate}
                     </td>
                     <td className="px-6 py-4 font-mono text-xs text-zinc-400">
-                      {Number(vehicle.max_weight_capacity_kg).toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                      {Number(vehicle.max_weight_capacity_kg).toLocaleString(
+                        "en-US",
+                        {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        },
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span
@@ -309,13 +481,47 @@ export default function FleetVehiclesPage() {
           </table>
         </div>
 
+        {/* ── Pagination control bar ── */}
+        <div className="bg-zinc-950/40 border border-zinc-800/80 rounded-xl p-3 flex items-center justify-between text-xs mt-4">
+          <span className="text-zinc-500">
+            Showing{" "}
+            <span className="font-mono text-zinc-300">{startIndex + 1}</span> to{" "}
+            <span className="font-mono text-zinc-300">
+              {Math.min(endIndex, vehicles.length)}
+            </span>{" "}
+            of{" "}
+            <span className="font-mono text-zinc-300">{vehicles.length}</span>{" "}
+            assets
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => goToPage(safeCurrentPage - 1)}
+              disabled={safeCurrentPage <= 1}
+              className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-800 disabled:hover:text-zinc-300"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => goToPage(safeCurrentPage + 1)}
+              disabled={safeCurrentPage >= totalPages}
+              className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 font-medium text-zinc-300 transition hover:border-zinc-700 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-800 disabled:hover:text-zinc-300"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
         {/* ── Sliding Register Fleet Vehicle modal ── */}
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/80 backdrop-blur-sm">
             <div className="relative w-full max-w-md animate-in slide-in-from-bottom-4 duration-300 rounded-2xl border border-zinc-800 bg-zinc-900/90 p-6 shadow-2xl backdrop-blur-xl">
               {formSuccess ? (
                 <div className="flex flex-col items-center justify-center py-10 text-center">
-                  <span className="animate-bounce text-3xl text-emerald-400">✓</span>
+                  <span className="animate-bounce text-3xl text-emerald-400">
+                    ✓
+                  </span>
                   <h3 className="mt-2 text-sm font-semibold text-emerald-400">
                     Fleet Vehicle Registered Successfully
                   </h3>
@@ -330,15 +536,10 @@ export default function FleetVehiclesPage() {
                       Register Fleet Vehicle
                     </h3>
                     <p className="text-xs text-zinc-500">
-                      Provision a new equipment asset under the {tenant} workspace perimeter.
+                      Provision a new equipment asset under the {tenant}{" "}
+                      workspace perimeter.
                     </p>
                   </div>
-
-                  {formError && (
-                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 font-mono text-xs text-rose-400">
-                      {formError}
-                    </div>
-                  )}
 
                   <div>
                     <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500">
@@ -398,9 +599,35 @@ export default function FleetVehiclesPage() {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="flex-1 rounded-lg bg-emerald-500 py-2 text-xs font-semibold text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 py-2 text-xs font-semibold text-zinc-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {isSubmitting ? "Registering..." : "Register Vehicle"}
+                      {isSubmitting ? (
+                        <>
+                          <svg
+                            className="h-4 w-4 animate-spin"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                            />
+                          </svg>
+                          Provisioning fleet equipment...
+                        </>
+                      ) : (
+                        "Register Vehicle"
+                      )}
                     </button>
                   </div>
                 </form>
@@ -409,6 +636,13 @@ export default function FleetVehiclesPage() {
           </div>
         )}
       </div>
+
+      <ToastNotification
+        open={toast.open}
+        message={toast.message}
+        type={toast.type}
+        onClose={closeToast}
+      />
     </div>
   );
 }

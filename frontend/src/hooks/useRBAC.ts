@@ -35,6 +35,7 @@ interface MeEnvelope {
 interface UseRBACOptions {
   user?: AuthUser | null;
   skipFetch?: boolean;
+  tenantSlug?: string;
 }
 
 interface UseRBACResult {
@@ -59,7 +60,7 @@ function normalizeRole(value: unknown): UserRole | null {
 }
 
 export function useRBAC(options: UseRBACOptions = {}): UseRBACResult {
-  const { user: injectedUser, skipFetch = false } = options;
+  const { user: injectedUser, skipFetch = false, tenantSlug } = options;
 
   const [fetchedUser, setFetchedUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState<boolean>(!skipFetch && !injectedUser);
@@ -86,7 +87,7 @@ export function useRBAC(options: UseRBACOptions = {}): UseRBACResult {
         const backendBaseUrl = `${currentProtocol}//${currentHostname}:8000/api/v1`;
         const client = createApiClient({ baseUrl: backendBaseUrl });
 
-        const activeTenantSlug = resolveTenantSlug(currentHostname);
+        const activeTenantSlug = tenantSlug ?? resolveTenantSlug(currentHostname);
 
         const response = await client.get<MeEnvelope>("/auth/me", {
           headers: {
@@ -113,7 +114,7 @@ export function useRBAC(options: UseRBACOptions = {}): UseRBACResult {
     return () => {
       active = false;
     };
-  }, [injectedUser, skipFetch]);
+  }, [injectedUser, skipFetch, tenantSlug]);
 
   const user = injectedUser ?? fetchedUser;
 

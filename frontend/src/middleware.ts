@@ -22,8 +22,8 @@ const RESERVED_SUBDOMAINS = new Set(["www", "app", "api", "admin", "status"]);
  */
 const SESSION_COOKIE_NAMES: ReadonlySet<string> = new Set([
   "laravel_session",
-  "logiflow_session",
   "logiflow-session",
+  "logiflow_session",
 ]);
 
 /** Top-level path segments that require a valid session. */

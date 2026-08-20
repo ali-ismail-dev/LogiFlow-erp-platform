@@ -1,19 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import * as React from "react";
+import { useCallback, useEffect, useState } from "react";
 import Echo from "laravel-echo";
 import Pusher from "pusher-js";
 import type { Dispatch, LedgerLogEntry, OperationalMetrics } from "@/types/logistics";
-import { useRBAC, ROLE_LABELS, type AuthUser } from "@/hooks/useRBAC";
+import type { AuthUser } from "@/hooks/useRBAC";
 import { MetricsFeed } from "./metrics-feed";
 import { DispatchBoard } from "./dispatch-board";
 import { MonitoringSidebar } from "./monitoring-sidebar";
 import { OperationalControlBoard } from "./OperationalControlBoard";
-import { getBroadcastingAuthUrl } from "@/lib/reverb-auth";
-import { buildTenantAwarePath } from "@/lib/tenant-routing";
 import { createApiClient } from "@/lib/api/apiClient";
-import { LogoutButton } from "./LogoutButton";
 
 type LiveDispatchEvent = {
   id: string | number;
@@ -21,20 +18,12 @@ type LiveDispatchEvent = {
   status: string;
   reference_number?: string;
   reference_code?: string;
-  current_stop?: {
-    id: string | number;
-    sequence: number;
-    label: string;
-    status: string;
-    eta: string | null;
-  } | null;
-  driver?: {
-    id: string | number;
-    name: string;
-  } | null;
-  vehicle_identifier?: string;
+  driver?: { id: string | number; name: string } | null;
   driver_name?: string;
-  updated_at: string | null;
+  vehicle_identifier?: string;
+  created_at?: string;
+  warehouse?: Dispatch["warehouse"];
+  stops?: Dispatch["stops"];
 };
 
 interface DashboardLiveSyncProps {
@@ -44,9 +33,6 @@ interface DashboardLiveSyncProps {
   tenantSlug: string;
   tenantId: string | number;
   authUser: AuthUser | null;
-  // FIXED: The server-hydrated real database user roster. Forwarded to the
-  // MonitoringSidebar so the Active Drivers list and the active_drivers metric
-  // count both derive from the exact same source of truth (driver-role rows).
   usersRoster?: AuthUser[];
 }
 
@@ -57,19 +43,11 @@ if (typeof window !== "undefined") {
 const REVERB_EVENT_NAME = ".dispatch.movement.updated";
 
 async function authorizeChannel(channelName: string, socketId: string, tenantSlug: string) {
-  const currentProtocol = window.location.protocol;
-  const currentHostname = window.location.hostname;
-  // Keep session cookies first-party by using the active tenant host, not bare localhost.
-  const backendBaseUrl = `${currentProtocol}//${currentHostname}:8000`;
-  const client = createApiClient({ baseUrl: backendBaseUrl });
-
+  const client = createApiClient({ baseUrl: `${window.location.protocol}//${window.location.hostname}:8000` });
   const response = await client.post<any>("/broadcasting/auth", {
     socket_id: socketId,
     channel_name: channelName,
-  }, {
-    headers: { "X-Tenant-ID": tenantSlug }
-  });
-
+  }, { headers: { "X-Tenant-ID": tenantSlug } });
   return response.data;
 }
 
@@ -79,57 +57,28 @@ export function DashboardLiveSync({
   initialEntries,
   tenantSlug,
   tenantId,
-  authUser,
+  authUser: _authUser,
   usersRoster = [],
 }: DashboardLiveSyncProps) {
   const [dispatches, setDispatches] = useState<Dispatch[]>(initialDispatches);
   const [metrics, setMetrics] = useState<OperationalMetrics>(initialMetrics);
   const [auditTrailEntries, setAuditTrailEntries] = useState<LedgerLogEntry[]>(initialEntries);
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState<"success" | "error">("success");
+  const toastTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  const router = useRouter();
-
-  // FIXED: Resolve the cockpit operative's identity and role natively in the browser
-  // via the same client-side /auth/me handshake the Employees page uses (which is
-  // proven to work — it carries the authenticated session cookie and resolves
-  // super_admin). Passing the server-hydrated `authUser` (null over the internal
-  // SSR network) and forcing skipFetch had been short-circuiting role resolution,
-  // leaving the operative as "Guest" and suppressing the RBAC-gated Team Directory
-  // button. When authUser is null, allow the browser to refetch the real session.
-  const currentUserRole = useRBAC({
-    user: authUser,
-    skipFetch: !!authUser,
-  });
-
-  const activeOperativeLabel = currentUserRole.role ? ROLE_LABELS[currentUserRole.role] : "Guest Operative";
-
-  console.debug(`[Dashboard] Active cockpit operative: ${activeOperativeLabel}`);
-
-  // Helper function to create an audit trail entry from a dispatch event
-  const createAuditTrailEntry = (payload: LiveDispatchEvent): LedgerLogEntry => {
-    const referenceCode = payload.reference_code || payload.reference_number || "MANIFEST";
-    const driverName = payload.driver_name || payload.driver?.name || "Assigned Driver";
-    const status = payload.status || "in_transit";
-    
-    return {
-      id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      message: `Manifest ${referenceCode} advanced to ${status} (Driver: ${driverName})`,
-      status: "success",
-      created_at: new Date().toISOString(),
-    };
-  };
+  const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastOpen(true);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastOpen(false), 3000);
+  }, []);
 
   useEffect(() => {
-    // FIXED: Dynamically match the backend host to the active tenant subdomain context.
-    // This keeps the Laravel session cookie in first-party context, which restores
-    // private Reverb channel authorization in Firefox when Total Cookie Protection
-    // would otherwise block the bare localhost backend asset.
     const currentHostname = window.location.hostname;
-    const websocketHost = currentHostname.includes(".")
-      ? currentHostname
-      : tenantSlug
-        ? `${tenantSlug}.localhost`
-        : "localhost";
-
+    const websocketHost = currentHostname.includes(".") ? currentHostname : tenantSlug ? `${tenantSlug}.localhost` : "localhost";
     const echo = new Echo({
       broadcaster: "reverb",
       key: process.env.NEXT_PUBLIC_REVERB_APP_KEY || "logiflow_key",
@@ -138,125 +87,74 @@ export function DashboardLiveSync({
       wssPort: 8000,
       forceTLS: false,
       enabledTransports: ["ws", "wss"],
-      authorizer: (channel: any) => {
-        return {
-          authorize: (socketId: string, callback: Function) => {
-            authorizeChannel(channel.name, socketId, tenantSlug)
-              .then((data) => callback(false, data))
-              .catch((err) => callback(true, err));
-          },
-        };
-      },
+      authorizer: (channel: any) => ({
+        authorize: (socketId: string, callback: Function) => {
+          authorizeChannel(channel.name, socketId, tenantSlug).then((data) => callback(false, data)).catch((error) => callback(true, error));
+        },
+      }),
     });
 
     const resolvedTenantId = String(tenantId);
-
-    console.log(`[WebSocket] Subscribing securely to private channel: tenant.${resolvedTenantId}.ops`);
-
     const channel = echo.private(`tenant.${resolvedTenantId}.ops`);
-
     channel.listen(REVERB_EVENT_NAME, (event: any) => {
-      console.log("🚀 Real-Time Event Captured Cleanly:", event);
-
-      const payload = event.dispatch ?? event;
-      const incomingId = payload.id;
-
-      if (!incomingId) return;
-
-      // Create an audit trail entry from the dispatch event
-      const auditEntry = createAuditTrailEntry(payload);
-      setAuditTrailEntries((prev) => [auditEntry, ...prev].slice(0, 15));
-
-      setDispatches((prev) => {
-        const index = prev.findIndex((d) => String(d.id) === String(incomingId));
-        const existing = index === -1 ? undefined : prev[index];
-
+      const payload: LiveDispatchEvent = event.dispatch ?? event;
+      if (!payload.id) return;
+      const referenceCode = payload.reference_code || payload.reference_number || "MANIFEST";
+      const driverName = payload.driver_name || payload.driver?.name || "Assigned Driver";
+      const auditEntry: LedgerLogEntry = {
+        id: `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        message: `Manifest ${referenceCode} advanced to ${payload.status || "in_transit"} (Driver: ${driverName})`,
+        status: "success",
+        created_at: new Date().toISOString(),
+      };
+      setAuditTrailEntries((previous) => [auditEntry, ...previous].slice(0, 15));
+      showToast(auditEntry.message);
+      setDispatches((previous) => {
+        const index = previous.findIndex((dispatch) => String(dispatch.id) === String(payload.id));
+        const existing = index === -1 ? undefined : previous[index];
         const nextDispatch = {
           ...(existing ?? {}),
-          id: String(incomingId),
+          id: String(payload.id),
           tenant_id: String(payload.tenant_id ?? resolvedTenantId),
           status: payload.status ?? existing?.status ?? "in_transit",
-          reference_code: payload.reference_code || payload.reference_number || existing?.reference_code || "DSP-MANIFEST",
-          driver_name: payload.driver_name || payload.driver?.name || existing?.driver_name || "Assigned Driver",
-          vehicle_identifier: payload.vehicle_identifier || payload.vehicle?.identifier || existing?.vehicle_identifier || "FLEET-VAN",
-          departed_at: payload.departed_at || payload.created_at || existing?.departed_at || new Date().toISOString(),
+          reference_code: referenceCode,
+          driver_name: driverName,
+          vehicle_identifier: payload.vehicle_identifier || existing?.vehicle_identifier || "FLEET-VAN",
+          departed_at: payload.created_at || existing?.departed_at || new Date().toISOString(),
           warehouse: payload.warehouse || existing?.warehouse || { id: "wh_01", name: "Nike Warehouse Hub", code: "NKE-WH", timezone: "UTC", latitude: 0, longitude: 0 },
           stops: payload.stops || existing?.stops || [],
         } as Dispatch;
-
-        let next = index === -1 ? [nextDispatch, ...prev] : prev.map((d) => String(d.id) === String(incomingId) ? nextDispatch : d);
-
-        // FIXED: Corrected mathematical array sorting subtraction to maintain pristine chronological layout ordering (Oldest on top)
-        next.sort((a, b) => Number(a.id) - Number(b.id));
-
-        // Calculate manifest‑specific operational metrics in real‑time
-        const pendingStopsCount = next.reduce((acc, curr) => acc + (curr.stops?.filter((s) => String(s.status).toLowerCase() === "pending").length || 0), 0);
-        const liveDelaysCount = next.filter((d) => String(d.status).toLowerCase() === "delayed").length;
-
-        setMetrics((prevMetrics) => ({
-          ...prevMetrics,
-          total_dispatches: next.length,
-          pending_stops: pendingStopsCount,
-          live_delays: liveDelaysCount,
-          // FIXED: Retain the true database‑backed driver count from server hydration
-          // instead of blindly overwriting it with names extracted from live manifests.
-          active_drivers: prevMetrics.active_drivers,
-        }));
-
+        const next = index === -1 ? [nextDispatch, ...previous] : previous.map((dispatch) => String(dispatch.id) === String(payload.id) ? nextDispatch : dispatch);
+        const pendingStops = next.reduce((count, dispatch) => count + (dispatch.stops?.filter((stop) => String(stop.status).toLowerCase() === "pending").length || 0), 0);
+        const liveDelays = next.filter((dispatch) => String(dispatch.status).toLowerCase() === "delayed").length;
+        setMetrics((previousMetrics) => ({ ...previousMetrics, total_dispatches: next.length, pending_stops: pendingStops, live_delays: liveDelays }));
         return next;
       });
     });
-
     channel.error((error: unknown) => {
       console.error("[WebSocket] Subscription error", error);
+      showToast("Realtime connection interrupted. Attempting to reconnect...", "error");
     });
-
     return () => {
       channel.stopListening(REVERB_EVENT_NAME);
       echo.disconnect();
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
-  }, [tenantSlug, tenantId]);
+  }, [tenantSlug, tenantId, showToast]);
 
   return (
-    <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-12 lg:gap-6 lg:p-8">
-      {/* Operational Control Board - Primary Navigation */}
-      <section className="lg:col-span-12">
-        <OperationalControlBoard tenantSlug={tenantSlug} />
-      </section>
-
-      {/* Secondary Navigation and Logout */}
-      <div className="flex items-center justify-between gap-3 lg:col-span-12">
-        <div className="flex items-center gap-3">
-          {currentUserRole.can("invite_users") && (
-            <button
-              type="button"
-              onClick={() => router.push(buildTenantAwarePath("/employees", tenantSlug))}
-              className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-2 text-xs font-semibold tracking-wide text-zinc-300 transition-all hover:border-zinc-700 hover:text-zinc-100"
-            >
-              Manage Team Directory →
-            </button>
-          )}
-        </div>
-
-        {/*
-          Security perimeter control — lets the SuperAdmin terminate their own
-          stateful session on command and drop cleanly back to the login gateway.
-        */}
-        <div className="flex items-center">
-          <LogoutButton />
-        </div>
+    <>
+      <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-12 lg:gap-6 lg:p-8">
+        <section className="lg:col-span-12"><OperationalControlBoard tenantSlug={tenantSlug} /></section>
+        <aside className="lg:col-span-3"><MetricsFeed initialMetrics={metrics} ledgerEntries={auditTrailEntries} onClearLedger={() => setAuditTrailEntries([])} /></aside>
+        <section className="lg:col-span-6"><DispatchBoard initialDispatches={dispatches} tenantSlug={tenantSlug} usersRoster={usersRoster} /></section>
+        <aside className="lg:col-span-3"><MonitoringSidebar usersRoster={usersRoster} /></aside>
       </div>
-
-      {/* Analytics & Monitoring Layout */}
-      <aside className="lg:col-span-3">
-        <MetricsFeed initialMetrics={metrics} />
-      </aside>
-      <section className="lg:col-span-6">
-        <DispatchBoard initialDispatches={dispatches} tenantSlug={tenantSlug} usersRoster={usersRoster} />
-      </section>
-      <aside className="lg:col-span-3">
-        <MonitoringSidebar initialEntries={auditTrailEntries} usersRoster={usersRoster} />
-      </aside>
-    </div>
+      {toastOpen && (
+        <div role="alert" aria-live="assertive" className={`fixed bottom-6 right-6 z-[100] max-w-sm rounded-xl border shadow-2xl backdrop-blur-xl ${toastType === "success" ? "border-emerald-500/50 bg-emerald-950/90" : "border-rose-500/50 bg-rose-950/90"}`}>
+          <div className="flex items-start gap-3 px-4 py-3"><div className="flex-1"><p className="text-sm font-medium text-zinc-100">{toastType === "success" ? "Dispatch Updated" : "Connection Alert"}</p><p className="mt-0.5 text-xs text-zinc-400">{toastMessage}</p></div><button onClick={() => setToastOpen(false)} className="text-zinc-500 hover:text-zinc-300" aria-label="Dismiss notification">X</button></div>
+        </div>
+      )}
+    </>
   );
 }

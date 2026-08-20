@@ -1,7 +1,13 @@
 .env
 .env.*
+docker/.env
 .phpunit.cache/
 node_modules/
 backend/.env
 frontend/.env
 frontend/.env.local
+
+# Local command ledgers (personal development notes)
+BACKEND_COMMANDS_LEDGER.md
+DOCKER_INFRASTRUCTURE_LEDGER.md
+FRONTEND_COMMANDS_LEDGER.md

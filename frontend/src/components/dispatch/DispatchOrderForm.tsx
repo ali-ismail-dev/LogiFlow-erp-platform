@@ -135,6 +135,7 @@ export function DispatchOrderForm({ onSubmit }: DispatchOrderFormProps) {
     "block w-full rounded-lg border border-zinc-800/60 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 transition-all duration-200 focus:border-emerald-500/60 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 hover:border-zinc-700/80";
   const labelClasses = "mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500";
   const sectionTitleClasses = "text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400";
+  const cardClasses = "bg-zinc-900/40 border border-zinc-800/80 backdrop-blur-xl rounded-2xl p-4 transition-all duration-150";
 
   return (
     <form
@@ -220,7 +221,7 @@ export function DispatchOrderForm({ onSubmit }: DispatchOrderFormProps) {
       <fieldset className="space-y-5">
         <div className="flex items-center justify-between">
           <legend className={sectionTitleClasses}>Stops</legend>
-          <span className="rounded-full border border-zinc-800/60 bg-zinc-900/50 px-3 py-0.5 text-xs text-zinc-400">
+          <span className={`rounded-full border border-zinc-800/60 bg-zinc-900/50 px-3 py-0.5 text-xs text-zinc-400 font-mono tabular-nums`}>
             {stops.length} stop{stops.length !== 1 ? "s" : ""}
           </span>
         </div>
@@ -230,7 +231,7 @@ export function DispatchOrderForm({ onSubmit }: DispatchOrderFormProps) {
             key={stop.key}
             role="group"
             aria-label={`Stop ${index + 1}`}
-            className="relative rounded-xl border border-zinc-800/60 bg-zinc-900/40 p-5 transition-colors hover:border-zinc-700/70"
+            className={cardClasses}
           >
             <div className="mb-4 flex items-center justify-between">
               <span className="text-sm font-medium text-zinc-300">
@@ -240,7 +241,7 @@ export function DispatchOrderForm({ onSubmit }: DispatchOrderFormProps) {
                 type="button"
                 onClick={() => handleRemoveStop(stop.key)}
                 aria-label={`Remove stop ${index + 1}`}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-rose-400"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-400"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
                   <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -378,6 +379,36 @@ export function DispatchOrderForm({ onSubmit }: DispatchOrderFormProps) {
         </button>
       </fieldset>
 
+      {/* ── Manifest Payload Summary ── */}
+      <div className={`${cardClasses} space-y-3`}>
+        <div className="flex items-center justify-between">
+          <h3 className={sectionTitleClasses}>Manifest Payload Summary</h3>
+          <span className="rounded-full border border-zinc-800/60 bg-zinc-950/60 px-3 py-0.5 text-xs text-zinc-400 font-mono tabular-nums">
+            {stops.length} stop{stops.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/60 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">Reference</p>
+            <p className="mt-1 font-mono text-sm font-semibold tracking-tight text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.15)] tabular-nums">
+              {referenceCode || "—"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/60 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">Vehicle</p>
+            <p className="mt-1 font-mono text-sm font-semibold tracking-tight text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.15)] tabular-nums">
+              {vehicleIdentifier || "—"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-zinc-800/60 bg-zinc-950/60 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-600">Driver</p>
+            <p className="mt-1 font-mono text-sm font-semibold tracking-tight text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.15)] tabular-nums">
+              {driverName || "—"}
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* ── Form Error ── */}
       {error && (
         <div
@@ -403,7 +434,7 @@ export function DispatchOrderForm({ onSubmit }: DispatchOrderFormProps) {
           {isSubmitting ? (
             <>
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-950/30 border-t-zinc-950" />
-              Submitting…
+              Compiling route payload...
             </>
           ) : (
             <>

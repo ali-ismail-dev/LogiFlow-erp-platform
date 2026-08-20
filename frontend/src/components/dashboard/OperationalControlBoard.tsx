@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Truck,
   Users,
+  UsersRound,
   Route,
   Package,
   Building2,
@@ -34,6 +36,7 @@ export function OperationalControlBoard({
 }: OperationalControlBoardProps) {
   const router = useRouter();
   const { isSuperAdmin, isDispatcher, isWarehouseManager } = useRBAC();
+  const [navigatingId, setNavigatingId] = useState<string | null>(null);
 
   const controlItems: BoardItem[] = [
     {
@@ -43,8 +46,8 @@ export function OperationalControlBoard({
       icon: Truck,
       href: buildTenantAwarePath("/vehicles", tenantSlug),
       bgGradient: "from-blue-500/20 to-blue-600/20",
-      borderColor: "border-blue-700/40",
-      borderHover: "hover:border-blue-500/60",
+      borderColor: "border-zinc-800/80",
+      borderHover: "hover:border-blue-400/60",
       iconBg: "bg-blue-500/10",
       iconHoverBg: "group-hover:bg-blue-500/20",
     },
@@ -55,10 +58,22 @@ export function OperationalControlBoard({
       icon: Users,
       href: buildTenantAwarePath("/drivers", tenantSlug),
       bgGradient: "from-emerald-500/20 to-emerald-600/20",
-      borderColor: "border-emerald-700/40",
-      borderHover: "hover:border-emerald-500/60",
+      borderColor: "border-zinc-800/80",
+      borderHover: "hover:border-emerald-400/60",
       iconBg: "bg-emerald-500/10",
       iconHoverBg: "group-hover:bg-emerald-500/20",
+    },
+    {
+      id: "employees",
+      title: "Employee Directory Board",
+      description: "Manage employee accounts, roles, and access across the organization",
+      icon: UsersRound,
+      href: buildTenantAwarePath("/employees", tenantSlug),
+      bgGradient: "from-rose-500/20 to-rose-600/20",
+      borderColor: "border-zinc-800/80",
+      borderHover: "hover:border-rose-400/60",
+      iconBg: "bg-rose-500/10",
+      iconHoverBg: "group-hover:bg-rose-500/20",
     },
     {
       id: "dispatches",
@@ -67,34 +82,10 @@ export function OperationalControlBoard({
       icon: Route,
       href: buildTenantAwarePath("/dispatches/new", tenantSlug),
       bgGradient: "from-purple-500/20 to-purple-600/20",
-      borderColor: "border-purple-700/40",
-      borderHover: "hover:border-purple-500/60",
+      borderColor: "border-zinc-800/80",
+      borderHover: "hover:border-purple-400/60",
       iconBg: "bg-purple-500/10",
       iconHoverBg: "group-hover:bg-purple-500/20",
-    },
-    {
-      id: "employees",
-      title: "Corporate Employees Board",
-      description: "Manage team directory, roles, and organizational structure",
-      icon: Building2,
-      href: buildTenantAwarePath("/employees", tenantSlug),
-      bgGradient: "from-amber-500/20 to-amber-600/20",
-      borderColor: "border-amber-700/40",
-      borderHover: "hover:border-amber-500/60",
-      iconBg: "bg-amber-500/10",
-      iconHoverBg: "group-hover:bg-amber-500/20",
-    },
-    {
-      id: "warehouses",
-      title: "Facility Hub Portal",
-      description: "Register and monitor fulfillment facilities across the active network",
-      icon: Building2,
-      href: buildTenantAwarePath("/warehouses", tenantSlug),
-      bgGradient: "from-cyan-500/20 to-cyan-600/20",
-      borderColor: "border-cyan-700/40",
-      borderHover: "hover:border-cyan-500/60",
-      iconBg: "bg-cyan-500/10",
-      iconHoverBg: "group-hover:bg-cyan-500/20",
     },
     {
       id: "order-intake",
@@ -103,10 +94,22 @@ export function OperationalControlBoard({
       icon: Package,
       href: buildTenantAwarePath("/orders/new", tenantSlug),
       bgGradient: "from-cyan-500/20 to-cyan-600/20",
-      borderColor: "border-cyan-700/40",
-      borderHover: "hover:border-cyan-500/60",
+      borderColor: "border-zinc-800/80",
+      borderHover: "hover:border-cyan-400/60",
       iconBg: "bg-cyan-500/10",
       iconHoverBg: "group-hover:bg-cyan-500/20",
+    },
+    {
+      id: "warehouses",
+      title: "Facility Hub Portal",
+      description: "Register and monitor fulfillment facilities across the active network",
+      icon: Building2,
+      href: buildTenantAwarePath("/warehouses", tenantSlug),
+      bgGradient: "from-amber-500/20 to-amber-600/20",
+      borderColor: "border-zinc-800/80",
+      borderHover: "hover:border-amber-400/60",
+      iconBg: "bg-amber-500/10",
+      iconHoverBg: "group-hover:bg-amber-500/20",
     },
   ];
 
@@ -116,7 +119,9 @@ export function OperationalControlBoard({
     }
 
     if (isDispatcher) {
-      return ["vehicles", "drivers", "dispatches", "order-intake", "warehouses"].includes(item.id);
+      return ["vehicles", "drivers", "dispatches", "order-intake"].includes(
+        item.id,
+      );
     }
 
     if (isWarehouseManager) {
@@ -126,7 +131,8 @@ export function OperationalControlBoard({
     return false;
   });
 
-  const handleNavigate = (href: string) => {
+  const handleNavigate = (href: string, id: string) => {
+    setNavigatingId(id);
     router.push(href);
   };
 
@@ -143,15 +149,21 @@ export function OperationalControlBoard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {visibleControlItems.map((item) => {
           const IconComponent = item.icon;
+          const isNavigating = navigatingId === item.id;
 
           return (
             <button
               key={item.id}
-              onClick={() => handleNavigate(item.href)}
-              className={`group relative overflow-hidden rounded-lg border bg-gradient-to-br px-4 py-5 text-left transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/10 ${item.bgGradient} ${item.borderColor} ${item.borderHover}`}
+              onClick={() => handleNavigate(item.href, item.id)}
+              disabled={isNavigating}
+              className={`group relative overflow-hidden rounded-lg border bg-zinc-900/40 bg-gradient-to-br px-4 py-5 text-left backdrop-blur-xl transition-all duration-300 ${item.bgGradient} ${item.borderColor} ${item.borderHover} ${
+                isNavigating
+                  ? "cursor-wait opacity-80"
+                  : "hover:shadow-lg hover:shadow-emerald-500/10"
+              }`}
             >
               {/* Animated glow effect on hover */}
               <div className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
@@ -160,7 +172,9 @@ export function OperationalControlBoard({
 
               <div className="relative z-10">
                 {/* Icon */}
-                <div className={`mb-3 inline-block rounded-lg ${item.iconBg} p-3 backdrop-blur-sm transition-all duration-300 ${item.iconHoverBg} group-hover:shadow-lg group-hover:shadow-emerald-500/20`}>
+                <div
+                  className={`mb-3 inline-block rounded-lg ${item.iconBg} p-3 backdrop-blur-sm transition-all duration-300 ${item.iconHoverBg} group-hover:shadow-lg group-hover:shadow-emerald-500/20`}
+                >
                   <IconComponent className="h-5 w-5 text-zinc-300 transition-colors duration-300 group-hover:text-emerald-400" />
                 </div>
 
@@ -174,10 +188,38 @@ export function OperationalControlBoard({
                   {item.description}
                 </p>
 
-                {/* CTA Arrow */}
+                {/* CTA Area with loading state */}
                 <div className="flex items-center gap-2 text-xs font-medium text-zinc-400 transition-all duration-300 group-hover:gap-3 group-hover:text-emerald-400">
-                  <span>Access Board</span>
-                  <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1" />
+                  {isNavigating ? (
+                    <>
+                      <svg
+                        className="h-4 w-4 animate-spin text-cyan-400"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                        />
+                      </svg>
+                      <span>Synchronizing Thread...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Access Board</span>
+                      <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1" />
+                    </>
+                  )}
                 </div>
               </div>
             </button>

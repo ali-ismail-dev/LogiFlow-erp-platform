@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 
 final class UserController extends Controller
@@ -39,14 +40,6 @@ final class UserController extends Controller
     {
         Gate::authorize('manage-team');
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'role' => ['required', new \Illuminate\Validation\Rules\Enum(\App\Enums\UserRole::class)],
-        ]);
-
-        // Resolve the true, database-backed numeric Tenant model row from the manager 
-        // to extract its real integer ID rather than attempting to write a text string slug.
         $tenantManager = app(\App\Support\Tenancy\TenantManager::class);
         $resolvedTenant = $tenantManager->getTenant();
 
@@ -55,6 +48,20 @@ final class UserController extends Controller
                 "Unable to securely resolve an active, mapped organizational workspace context."
             );
         }
+
+        $resolvedTenantId = $resolvedTenant->id;
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique('users')->where(fn($query) => $query->where('tenant_id', $resolvedTenantId)),
+            ],
+            'role' => ['required', new \Illuminate\Validation\Rules\Enum(\App\Enums\UserRole::class)],
+        ]);
 
         $user = User::create([
             'tenant_id' => $resolvedTenant->id, // Real Numeric BIGINT Primary Key ID

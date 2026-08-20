@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Building2, CheckCircle2, MapPin, PackageCheck, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  Building2,
+  CheckCircle2,
+  MapPin,
+  PackageCheck,
+  ShieldCheck,
+} from "lucide-react";
 import { DashboardSecurityBoundary } from "@/components/dashboard/DashboardSecurityBoundary";
 import { useRBAC } from "@/hooks/useRBAC";
 import { createApiClient } from "@/lib/api/apiClient";
@@ -25,7 +32,9 @@ interface WarehousesEnvelope {
   message?: string;
 }
 
-function normalizeWarehouses(payload: WarehousesEnvelope["data"] | null | undefined): WarehouseRecord[] {
+function normalizeWarehouses(
+  payload: WarehousesEnvelope["data"] | null | undefined,
+): WarehouseRecord[] {
   if (!payload) {
     return [];
   }
@@ -37,13 +46,124 @@ function normalizeWarehouses(payload: WarehousesEnvelope["data"] | null | undefi
   return [payload].filter(Boolean);
 }
 
+interface ToastState {
+  open: boolean;
+  message: string;
+  type: "success" | "error";
+}
+
+function ToastNotification({
+  open,
+  message,
+  type,
+  onClose,
+}: {
+  open: boolean;
+  message: string;
+  type: "success" | "error";
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const timeoutId = window.setTimeout(() => {
+      onClose();
+    }, 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className={`fixed bottom-6 right-6 z-[100] max-w-sm rounded-xl border shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out ${
+        type === "success"
+          ? "border-emerald-500/50 bg-emerald-950/90 shadow-emerald-500/20"
+          : "border-rose-500/50 bg-rose-950/90 shadow-rose-500/20"
+      }`}
+      style={{
+        animation: "toast-in 0.3s cubic-bezier(0.21, 1.02, 0.73, 1)",
+      }}
+    >
+      <div className="flex items-start gap-3 px-4 py-3">
+        <div
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+            type === "success"
+              ? "bg-emerald-500/20 text-emerald-300"
+              : "bg-rose-500/20 text-rose-300"
+          }`}
+        >
+          {type === "success" ? (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M2 6l2.5 2.5L10 3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M3 3l6 6M9 3L3 9"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-zinc-100">
+            {type === "success" ? "Order Registered" : "Submission Error"}
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-400">{message}</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="ml-2 text-zinc-500 transition-colors hover:text-zinc-300"
+          aria-label="Dismiss notification"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path
+              d="M3 3l8 8M11 3L3 11"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
+      <style jsx>{`
+        @keyframes toast-in {
+          from {
+            opacity: 0;
+            transform: translateY(1rem) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function NewCargoOrderPage() {
   const params = useParams();
   const tenant = (params?.tenant as string) || "unknown";
   const router = useRouter();
   const dashboardHref = buildTenantAwarePath("/dashboard", tenant);
 
-  const { isSuperAdmin, isDispatcher, isWarehouseManager, loading: rbacLoading } = useRBAC();
+  const {
+    isSuperAdmin,
+    isDispatcher,
+    isWarehouseManager,
+    loading: rbacLoading,
+  } = useRBAC();
   const authorized = isSuperAdmin || isDispatcher || isWarehouseManager;
 
   const [warehouses, setWarehouses] = useState<WarehouseRecord[]>([]);
@@ -55,15 +175,30 @@ export default function NewCargoOrderPage() {
   const [city, setCity] = useState("");
   const [isLoadingWarehouses, setIsLoadingWarehouses] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>({
+    open: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = useCallback(
+    (message: string, type: "success" | "error") => {
+      setToast({ open: true, message, type });
+    },
+    [],
+  );
+
+  const closeToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, open: false }));
+  }, []);
 
   const buildClient = useCallback(() => {
-    const currentHostname = window.location.hostname;
-    const currentProtocol = window.location.protocol;
+    // Dynamically build the backend base URL to preserve cookie sharing boundaries across subdomains:
+    const currentHostname = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    const currentProtocol = typeof window !== "undefined" ? window.location.protocol : "http:";
     const backendBaseUrl = `${currentProtocol}//${currentHostname}:8000/api/v1`;
-    return createApiClient({ baseUrl: backendBaseUrl });
-  }, []);
+    return createApiClient({ baseUrl: backendBaseUrl, tenant });
+  }, [tenant]);
 
   useEffect(() => {
     let isMounted = true;
@@ -84,14 +219,13 @@ export default function NewCargoOrderPage() {
           }
 
           setWarehouses(warehouseList);
-          if (warehouseList.length > 0 && !selectedWarehouseId) {
-            setSelectedWarehouseId(String(warehouseList[0].id ?? ""));
-          }
-          if (warehouseList.length > 0 && selectedWarehouseId === "") {
+          if (warehouseList.length > 0) {
             setSelectedWarehouseId(String(warehouseList[0].id ?? ""));
           }
         } else {
-          setWarehouses([]);
+          if (isMounted) {
+            setWarehouses([]);
+          }
         }
       } catch (error) {
         console.error("[Manual Order Form] Warehouse hydration failed:", error);
@@ -110,13 +244,16 @@ export default function NewCargoOrderPage() {
     return () => {
       isMounted = false;
     };
-  }, [buildClient, selectedWarehouseId, tenant]);
+  }, [buildClient, tenant]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!authorized) {
-      setSubmitError("You do not have permission to register an incoming cargo order.");
+      showToast(
+        "You do not have permission to register an incoming cargo order.",
+        "error",
+      );
       return;
     }
 
@@ -135,13 +272,14 @@ export default function NewCargoOrderPage() {
       !Number.isFinite(parsedWeight) ||
       parsedWeight <= 0
     ) {
-      setSubmitError("Please complete all required order details and select a destination warehouse.");
+      showToast(
+        "Please complete all required order details and select a destination warehouse.",
+        "error",
+      );
       return;
     }
 
     setIsSubmitting(true);
-    setSubmitError(null);
-    setSuccessMessage(null);
 
     try {
       const client = buildClient();
@@ -164,16 +302,24 @@ export default function NewCargoOrderPage() {
       });
 
       if (response.status !== 200 && response.status !== 201) {
-        throw new Error("The order backend rejected this cargo registration request.");
+        throw new Error(
+          "The order backend rejected this cargo registration request.",
+        );
       }
 
-      setSuccessMessage("Cargo order registered successfully. Redirecting to unassigned queue...");
+      showToast(
+        "Cargo order registered successfully. Redirecting to unassigned queue...",
+        "success",
+      );
       setTimeout(() => {
         router.push(buildTenantAwarePath("/dispatches/new", tenant));
       }, 1500);
     } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : "Cargo order registration failed. Please retry.",
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Cargo order registration failed. Please retry.",
+        "error",
       );
     } finally {
       setIsSubmitting(false);
@@ -192,9 +338,12 @@ export default function NewCargoOrderPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-300">
             Security exclusion
           </p>
-          <h1 className="mt-3 text-2xl font-semibold text-white">Access restricted</h1>
+          <h1 className="mt-3 text-2xl font-semibold text-white">
+            Access restricted
+          </h1>
           <p className="mt-3 text-sm text-rose-100/80">
-            Manual cargo ingestion is restricted to dispatch personnel and warehouse administrators.
+            Manual cargo ingestion is restricted to dispatch personnel and
+            warehouse administrators.
           </p>
           <Link
             href={dashboardHref}
@@ -209,12 +358,38 @@ export default function NewCargoOrderPage() {
 
   if (isLoadingState) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-6 text-zinc-200">
-        <div className="flex items-center gap-3 rounded-full border border-zinc-800 bg-zinc-900/80 px-4 py-2.5 text-sm text-zinc-300 shadow-lg shadow-black/20">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-400" />
-          Synchronizing warehouse roster...
+      <DashboardSecurityBoundary tenant={tenant}>
+        <div className="min-h-screen bg-zinc-950 px-4 py-8 text-zinc-100 md:px-8 lg:px-10">
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-3">
+                <div className="h-4 w-28 animate-pulse rounded-2xl bg-zinc-900/60" />
+                <div className="h-6 w-64 animate-pulse rounded-2xl bg-zinc-900/60" />
+              </div>
+              <div className="h-10 w-36 animate-pulse rounded-2xl bg-zinc-900/60" />
+            </div>
+            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-5 rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 md:p-6">
+                <div className="h-6 w-48 animate-pulse rounded-2xl bg-zinc-900/60" />
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div className="h-12 animate-pulse rounded-2xl bg-zinc-900/60" />
+                  <div className="h-12 animate-pulse rounded-2xl bg-zinc-900/60" />
+                </div>
+                <div className="h-12 animate-pulse rounded-2xl bg-zinc-900/60" />
+                <div className="h-12 animate-pulse rounded-2xl bg-zinc-900/60" />
+                <div className="h-24 animate-pulse rounded-2xl bg-zinc-900/60" />
+                <div className="flex justify-end">
+                  <div className="h-12 w-40 animate-pulse rounded-2xl bg-zinc-900/60" />
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div className="h-40 animate-pulse rounded-3xl bg-zinc-900/60" />
+                <div className="h-40 animate-pulse rounded-3xl bg-zinc-900/60" />
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </DashboardSecurityBoundary>
     );
   }
 
@@ -257,7 +432,9 @@ export default function NewCargoOrderPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
                     New inbound order
                   </p>
-                  <h2 className="mt-1 text-xl font-semibold text-zinc-50">Cargo registration form</h2>
+                  <h2 className="mt-1 text-xl font-semibold text-zinc-50">
+                    Cargo registration form
+                  </h2>
                 </div>
               </div>
 
@@ -311,14 +488,22 @@ export default function NewCargoOrderPage() {
                     <Building2 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                     <select
                       value={selectedWarehouseId}
-                      onChange={(event) => setSelectedWarehouseId(event.target.value)}
+                      onChange={(event) =>
+                        setSelectedWarehouseId(event.target.value)
+                      }
                       className="w-full appearance-none rounded-2xl border border-zinc-700 bg-zinc-950/60 px-10 py-3 text-sm text-zinc-50 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20"
                     >
                       {warehouses.length === 0 ? (
                         <option value="">No active warehouses available</option>
                       ) : (
                         warehouses.map((warehouse) => (
-                          <option key={String(warehouse.id ?? `${warehouse.name}-${warehouse.code}`)} value={String(warehouse.id ?? "")}>
+                          <option
+                            key={String(
+                              warehouse.id ??
+                                `${warehouse.name}-${warehouse.code}`,
+                            )}
+                            value={String(warehouse.id ?? "")}
+                          >
                             {warehouse.name || warehouse.code || "Warehouse"}
                             {warehouse.code ? ` · ${warehouse.code}` : ""}
                           </option>
@@ -361,26 +546,44 @@ export default function NewCargoOrderPage() {
                   </div>
                 </div>
 
-                {submitError ? (
-                  <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                    {submitError}
-                  </div>
-                ) : null}
-
-                {successMessage ? (
-                  <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                    {successMessage}
-                  </div>
-                ) : null}
-
                 <div className="flex items-center justify-end pt-2">
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 px-5 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="group relative inline-flex items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 px-5 py-3 text-sm font-semibold text-zinc-950 shadow-lg shadow-emerald-500/20 transition hover:brightness-120 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isSubmitting ? "Registering order..." : "Register cargo order"}
+                    <span className="relative z-10 flex items-center gap-3">
+                      {isSubmitting ? (
+                        <>
+                          <svg
+                            className="h-5 w-5 animate-spin"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                            />
+                          </svg>
+                          Ingesting cargo payload matrix...
+                        </>
+                      ) : (
+                        "Register cargo order"
+                      )}
+                    </span>
+                    {!isSubmitting && (
+                      <div className="absolute inset-0 -translate-x-full skew-x-12 bg-white/10 transition-transform duration-700 group-hover:translate-x-full" />
+                    )}
                   </button>
                 </div>
               </form>
@@ -396,7 +599,9 @@ export default function NewCargoOrderPage() {
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
                       Warehouse roster
                     </p>
-                    <h3 className="mt-1 text-lg font-semibold text-zinc-50">Live fulfillment nodes</h3>
+                    <h3 className="mt-1 text-lg font-semibold text-zinc-50">
+                      Live fulfillment nodes
+                    </h3>
                   </div>
                 </div>
 
@@ -408,7 +613,10 @@ export default function NewCargoOrderPage() {
                   ) : (
                     warehouses.map((warehouse) => (
                       <div
-                        key={String(warehouse.id ?? `${warehouse.name}-${warehouse.code}`)}
+                        key={String(
+                          warehouse.id ??
+                            `${warehouse.name}-${warehouse.code}`,
+                        )}
                         className={`rounded-2xl border p-3 transition ${
                           String(warehouse.id ?? "") === selectedWarehouseId
                             ? "border-emerald-500/40 bg-emerald-500/5"
@@ -421,7 +629,9 @@ export default function NewCargoOrderPage() {
                               {warehouse.name || warehouse.code || "Warehouse"}
                             </p>
                             <p className="mt-1 text-xs text-zinc-500">
-                              {warehouse.code ? `Code · ${warehouse.code}` : "Uncoded facility"}
+                              {warehouse.code
+                                ? `Code · ${warehouse.code}`
+                                : "Uncoded facility"}
                             </p>
                           </div>
                           <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.15em] text-emerald-200">
@@ -429,7 +639,10 @@ export default function NewCargoOrderPage() {
                           </span>
                         </div>
                         <p className="mt-3 text-xs text-zinc-400">
-                          {formatWarehouseLocation(warehouse.address, warehouse.city)}
+                          {formatWarehouseLocation(
+                            warehouse.address,
+                            warehouse.city,
+                          )}
                         </p>
                       </div>
                     ))
@@ -466,6 +679,13 @@ export default function NewCargoOrderPage() {
           </div>
         </div>
       </div>
+
+      <ToastNotification
+        open={toast.open}
+        message={toast.message}
+        type={toast.type}
+        onClose={closeToast}
+      />
     </DashboardSecurityBoundary>
   );
 }

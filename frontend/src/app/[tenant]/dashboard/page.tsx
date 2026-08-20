@@ -76,21 +76,6 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
   return (
     <DashboardSecurityBoundary tenant={tenant}>
       <div className="min-h-screen bg-zinc-950 text-zinc-100">
-        <header className="flex items-center justify-between border-b border-zinc-800/60 px-6 py-5 lg:px-8">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-zinc-500">
-              Operations Cockpit
-            </p>
-            <h1 className="mt-1 text-xl font-semibold text-zinc-50">{formatTenantName(tenant)}</h1>
-          </div>
-          <div className="hidden items-center gap-2 rounded-full border border-zinc-800/60 bg-zinc-900/50 px-3 py-1.5 text-xs text-zinc-400 sm:flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            <span className="font-mono tracking-tight">{tenant}</span>
-            <span className="text-zinc-600">·</span>
-            live session
-          </div>
-        </header>
-
         <main>
           <DashboardLiveSync
             initialDispatches={resolvedDispatches}

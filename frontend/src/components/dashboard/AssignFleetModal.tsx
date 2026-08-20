@@ -21,7 +21,11 @@ interface AssignFleetModalProps {
   tenantSlug: string;
   dispatchId: string | number;
   onClose: () => void;
-  onAssigned: (payload: { id: string | number; driver_name: string | null; vehicle_identifier: string | null }) => void;
+  onAssigned: (payload: {
+    id: string | number;
+    driver_name: string | null;
+    vehicle_identifier: string | null;
+  }) => void;
 }
 
 interface ApiEnvelope<T> {
@@ -103,7 +107,9 @@ export function AssignFleetModal({
         }
 
         setErrorMessage(
-          error instanceof Error ? error.message : "The fleet roster could not be loaded right now.",
+          error instanceof Error
+            ? error.message
+            : "The fleet roster could not be loaded right now.",
         );
       } finally {
         if (isActive) {
@@ -135,7 +141,13 @@ export function AssignFleetModal({
 
     try {
       const client = buildClient();
-      const response = await client.put<{ data?: { id?: string | number; driver_name?: string | null; vehicle_identifier?: string | null } }>(
+      const response = await client.put<{
+        data?: {
+          id?: string | number;
+          driver_name?: string | null;
+          vehicle_identifier?: string | null;
+        };
+      }>(
         `/dispatches/${dispatchId}/assign`,
         {
           driver_id: Number(selectedDriverId),
@@ -163,7 +175,9 @@ export function AssignFleetModal({
       onClose();
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "The fleet assignment could not be processed.",
+        error instanceof Error
+          ? error.message
+          : "The fleet assignment could not be processed.",
       );
     } finally {
       setIsSubmitting(false);
@@ -175,12 +189,16 @@ export function AssignFleetModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-3xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl shadow-black/30">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-3xl border border-zinc-800 bg-zinc-900/95 p-6 shadow-2xl shadow-cyan-950/20">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Fleet assignment</p>
-            <h3 className="mt-2 text-xl font-semibold text-white">Assign active route assets</h3>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              Fleet assignment
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-white">
+              Assign active route assets
+            </h3>
           </div>
 
           <button
@@ -207,7 +225,10 @@ export function AssignFleetModal({
         ) : (
           <div className="mt-6 space-y-5">
             <div>
-              <label htmlFor="assign-driver" className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              <label
+                htmlFor="assign-driver"
+                className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500"
+              >
                 <Users className="h-3.5 w-3.5" />
                 Driver
               </label>
@@ -215,7 +236,7 @@ export function AssignFleetModal({
                 id="assign-driver"
                 value={selectedDriverId}
                 onChange={(event) => setSelectedDriverId(event.target.value)}
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-500/10"
               >
                 <option value="">Select an available driver</option>
                 {drivers.map((driver) => (
@@ -227,7 +248,10 @@ export function AssignFleetModal({
             </div>
 
             <div>
-              <label htmlFor="assign-vehicle" className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              <label
+                htmlFor="assign-vehicle"
+                className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500"
+              >
                 <Truck className="h-3.5 w-3.5" />
                 Vehicle
               </label>
@@ -235,12 +259,14 @@ export function AssignFleetModal({
                 id="assign-vehicle"
                 value={selectedVehicleId}
                 onChange={(event) => setSelectedVehicleId(event.target.value)}
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"
+                className="w-full appearance-none rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-cyan-400 focus:ring-4 focus:ring-cyan-500/10"
               >
                 <option value="">Select an available vehicle</option>
                 {vehicles.map((vehicle) => (
                   <option key={String(vehicle.id)} value={String(vehicle.id)}>
-                    {vehicle.license_plate || vehicle.vehicle_type || `Vehicle #${vehicle.id}`}
+                    {vehicle.license_plate ||
+                      vehicle.vehicle_type ||
+                      `Vehicle #${vehicle.id}`}
                   </option>
                 ))}
               </select>
@@ -258,9 +284,35 @@ export function AssignFleetModal({
                 type="button"
                 onClick={handleSubmit}
                 disabled={disabledSubmit}
-                className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/40"
+                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/40"
               >
-                {isSubmitting ? "Assigning fleet..." : "Confirm assignment"}
+                {isSubmitting ? (
+                  <>
+                    <svg
+                      className="h-4 w-4 animate-spin text-emerald-400"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                      />
+                    </svg>
+                    Locking fleet assets...
+                  </>
+                ) : (
+                  "Confirm assignment"
+                )}
               </button>
             </div>
           </div>
