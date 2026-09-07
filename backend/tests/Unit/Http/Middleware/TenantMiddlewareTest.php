@@ -8,6 +8,7 @@ use App\Exceptions\TenantContextNotResolvedException;
 use App\Http\Middleware\TenantMiddleware;
 use App\Models\Tenant;
 use App\Support\Tenancy\TenantManager;
+use App\Support\Tenancy\TenantResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,13 +20,15 @@ final class TenantMiddlewareTest extends TestCase
     use RefreshDatabase;
 
     private TenantManager $tenantManager;
+    private TenantResolver $tenantResolver;
     private TenantMiddleware $middleware;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->tenantManager = $this->app->make(TenantManager::class);
-        $this->middleware = new TenantMiddleware($this->tenantManager);
+        $this->tenantResolver = $this->app->make(TenantResolver::class);
+        $this->middleware = new TenantMiddleware($this->tenantManager, $this->tenantResolver);
     }
 
     #[Test]
