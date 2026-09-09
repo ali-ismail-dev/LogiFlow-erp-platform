@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Actions\Dispatch;
 
-use App\Actions\Dispatches\DispatchOrdersAction;
+use App\Actions\Dispatch\DispatchOrdersAction;
 use App\DataTransferObjects\DispatchOrdersData;
 use App\DataTransferObjects\StopData;
 use App\Enums\DispatchStatus;

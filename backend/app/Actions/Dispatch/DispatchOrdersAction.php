@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Actions\Dispatches;
+namespace App\Actions\Dispatch;
 
 use App\Contracts\DispatchesOrders;
 use App\DataTransferObjects\DispatchOrdersData;
@@ -36,7 +36,7 @@ final class DispatchOrdersAction implements DispatchesOrders
             ]);
 
             $orders = Order::query()
-                ->whereKey(array_map(static fn ($stop) => $stop->orderId, $data->stops))
+                ->whereKey(array_map(static fn($stop) => $stop->orderId, $data->stops))
                 ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
@@ -56,6 +56,7 @@ final class DispatchOrdersAction implements DispatchesOrders
                 }
 
                 $dispatch->stops()->create([
+                    'tenant_id' => $dispatch->tenant_id,
                     'order_id' => $order->id,
                     'sequence' => $stopData->sequence,
                     'destination_address' => $stopData->destinationAddress,

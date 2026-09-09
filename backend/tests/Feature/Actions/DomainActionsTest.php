@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Actions;
 
 use App\Actions\Logistics\OptimizeFleetDispatchAction;
-use App\Actions\Dispatches\DispatchOrdersAction;
+use App\Actions\Dispatch\DispatchOrdersAction;
 use App\DataTransferObjects\DispatchOrdersData;
 use App\DataTransferObjects\StopData;
 use App\Enums\OrderStatus;
