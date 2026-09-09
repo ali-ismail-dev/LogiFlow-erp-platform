@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Actions;
 
-use App\Actions\Logistics\OptimizeFleetDispatchAction;
 use App\Actions\Dispatch\DispatchOrdersAction;
 use App\DataTransferObjects\DispatchOrdersData;
 use App\DataTransferObjects\StopData;
 use App\Enums\OrderStatus;
+use App\Jobs\OptimizeFleetDispatchJob;
 use App\Models\Dispatch;
 use App\Models\Order;
 use App\Models\Stop;
@@ -89,7 +89,7 @@ class DomainActionsTest extends TestCase
             'delivery_window_end' => now()->addHours(2),
         ]);
 
-        $dispatch = (new OptimizeFleetDispatchAction([$firstOrder->id, $secondOrder->id]))->handle();
+        $dispatch = (new OptimizeFleetDispatchJob([$firstOrder->id, $secondOrder->id], $tenant->id))->handle();
 
         $this->assertInstanceOf(Dispatch::class, $dispatch);
         $this->assertDatabaseHas('dispatches', [
@@ -149,7 +149,7 @@ class DomainActionsTest extends TestCase
 
         $this->expectException(ValidationException::class);
 
-        (new OptimizeFleetDispatchAction([$firstOrder->id, $secondOrder->id]))->handle();
+        (new OptimizeFleetDispatchJob([$firstOrder->id, $secondOrder->id], $tenant->id))->handle();
     }
 
     #[Test]

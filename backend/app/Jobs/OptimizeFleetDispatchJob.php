@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-namespace App\Actions\Logistics;
+namespace App\Jobs;
 
 use App\Models\Dispatch;
 use App\Models\Order;
 use App\Models\Stop;
+use App\Models\Tenant;
 use App\Models\Vehicle;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,7 +23,7 @@ use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use RuntimeException;
 
-class OptimizeFleetDispatchAction implements ShouldQueue, ShouldBeUnique
+final class OptimizeFleetDispatchJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -34,9 +35,10 @@ class OptimizeFleetDispatchAction implements ShouldQueue, ShouldBeUnique
      */
     public function __construct(
         private readonly array $orderIds,
+        private readonly string|int $tenantId,
     ) {
         if ($this->orderIds === []) {
-            throw new InvalidArgumentException('OptimizeFleetDispatchAction requires at least one order ID.');
+            throw new InvalidArgumentException('OptimizeFleetDispatchJob requires at least one order ID.');
         }
     }
 
@@ -44,7 +46,7 @@ class OptimizeFleetDispatchAction implements ShouldQueue, ShouldBeUnique
     {
         $normalized = $this->orderIds;
         sort($normalized, SORT_NUMERIC);
-        return 'fleet-dispatch:' . implode('-', $normalized);
+        return 'fleet-dispatch:' . $this->tenantId . ':' . implode('-', $normalized);
     }
 
     /**
@@ -54,6 +56,10 @@ class OptimizeFleetDispatchAction implements ShouldQueue, ShouldBeUnique
      */
     public function handle(): Dispatch
     {
+        // Force-inject context state into memory to activate database TenantScope filters inside background queues.
+        $tenant = Tenant::findOrFail($this->tenantId);
+        app(\App\Support\Tenancy\TenantManager::class)->resolve($tenant);
+
         $orders = $this->resolveOrders();
 
         // Harmonized field accessor pointing to total_weight_kg matching Phase 2 tables
@@ -66,6 +72,7 @@ class OptimizeFleetDispatchAction implements ShouldQueue, ShouldBeUnique
 
             $dispatch = Dispatch::create([
                 // Maps our exact Phase 2 table identifiers
+                'tenant_id' => $this->tenantId,
                 'warehouse_id' => $orders->first()->warehouse_id,
                 'reference_code' => 'DSP-' . strtoupper(uniqid()),
                 'vehicle_identifier' => $vehicle->license_plate,
@@ -130,6 +137,7 @@ class OptimizeFleetDispatchAction implements ShouldQueue, ShouldBeUnique
 
         foreach ($sorted as $order) {
             Stop::create([
+                'tenant_id' => $this->tenantId,
                 'dispatch_id' => $dispatch->id,
                 'order_id' => $order->id,
                 'sequence' => $sequence,
