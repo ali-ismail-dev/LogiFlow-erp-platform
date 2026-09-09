@@ -14,6 +14,8 @@ class OrderResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'tenant_id' => $this->whenNotNull($this->tenant_id),
+            'warehouse_id' => $this->whenNotNull($this->warehouse_id),
             'order_number' => $this->order_number,
             'customer_name' => $this->customer_name,
             'shipping_address' => $this->shipping_address,

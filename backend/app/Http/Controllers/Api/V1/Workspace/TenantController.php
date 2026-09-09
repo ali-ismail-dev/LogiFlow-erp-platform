@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Api\V1;
+namespace App\Http\Controllers\Api\V1\Workspace;
 
 use App\Http\Controllers\Controller;
 use App\Support\Tenancy\TenantManager;
@@ -15,14 +15,7 @@ final class TenantController extends Controller
     ) {}
 
     /**
-     * Resolve the currently-scoped tenant (from the X-Tenant-ID header or
-     * subdomain) to its canonical numeric id.
-     *
-     * The frontend needs the numeric tenant id to build the private
-     * broadcast channel name `tenant.{id}.ops` — the exact same value the
-     * backend event uses when it calls PrivateChannel(). The dashboard
-     * route slug is cosmetic and must never be used as the security-scoped
-     * channel identity.
+     * Resolve the currently-scoped tenant to its canonical numeric id.
      */
     public function current(): JsonResponse
     {
@@ -30,7 +23,7 @@ final class TenantController extends Controller
             return response()->json(['message' => 'No tenant context resolved.'], 404);
         }
 
-        $tenant = $this->tenantManager->tenant;
+        $tenant = $this->tenantManager->getTenant();
 
         return response()->json([
             'data' => [
@@ -38,7 +31,6 @@ final class TenantController extends Controller
                 'slug' => $tenant->slug,
                 'name' => $tenant->name,
             ],
-        ]);
+        ], 200);
     }
 }
-

@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Api\V1;
+namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Resources\UserResource;
 use App\Support\Tenancy\TenantManager;
 use Illuminate\Http\JsonResponse;
@@ -16,17 +17,11 @@ final class AuthController extends Controller
 {
     /**
      * Handle an inbound stateful login attempt.
-     *
-     * @throws ValidationException
      */
-    public function login(Request $request, TenantManager $tenantManager): JsonResponse
+    public function login(LoginRequest $request, TenantManager $tenantManager): JsonResponse
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'string', 'email'],
-            'password' => ['required', 'string'],
-        ]);
+        $credentials = $request->validated();
 
-        // Guard A: Attempt authentication against the globally resolved tenant boundary
         if (! Auth::attempt($credentials, (bool) $request->boolean('remember'))) {
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
@@ -36,11 +31,7 @@ final class AuthController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Guard B: Deep multi-tenant cross-login interception firewall
         if ((int) $user->tenant_id !== (int) $tenantManager->id) {
-            // This app uses Laravel's stateful session guard (not Sanctum API
-            // tokens), so terminating the session is a pure session-store
-            // operation: invalidate + regenerate the CSRF token.
             Auth::guard('web')->logout();
             if ($request->hasSession()) {
                 $request->session()->invalidate();
@@ -52,7 +43,6 @@ final class AuthController extends Controller
             ], 403);
         }
 
-        // Senior Pattern: Regenerate the session ID to completely block Session Hijacking/Fixation attacks
         if ($request->hasSession()) {
             $request->session()->regenerate();
         }
@@ -65,12 +55,6 @@ final class AuthController extends Controller
 
     /**
      * Terminate the active authenticated session cookie mesh.
-     *
-     * This application authenticates statefully via Laravel's session guard
-     * (Sanctum in "web/" SPA mode defines the guard as a RequestGuard, which
-     * has no logout() method). The correct session termination is therefore to
-     * invalidate the session store and regenerate the CSRF token, which fully
-     * drops the operator outside the corporate wall on the backend kernel.
      */
     public function logout(Request $request): JsonResponse
     {

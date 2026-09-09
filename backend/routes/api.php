@@ -1,16 +1,16 @@
 <?php
 
-use App\Http\Controllers\Api\V1\DispatchController;
-use App\Http\Controllers\Api\V1\AuthController;
-use App\Http\Controllers\Api\V1\DriverController;
-use App\Http\Controllers\Api\V1\OrderController;
-use App\Http\Controllers\Api\V1\TenantController;
-use App\Http\Controllers\Api\V1\Webhooks\CarrierWebhookController;
-use App\Http\Controllers\Api\V1\UserController;
-use App\Http\Controllers\Api\V1\VehicleController;
-use App\Http\Controllers\Api\V1\WarehouseController;
-use App\Http\Controllers\Api\V1\PublicRegistrationController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\Auth\PublicRegistrationController;
+use App\Http\Controllers\Api\V1\Logistics\DispatchController;
+use App\Http\Controllers\Api\V1\Logistics\DriverController;
+use App\Http\Controllers\Api\V1\Logistics\VehicleController;
+use App\Http\Controllers\Api\V1\Workspace\OrderController;
+use App\Http\Controllers\Api\V1\Workspace\TenantController;
+use App\Http\Controllers\Api\V1\Workspace\UserController;
+use App\Http\Controllers\Api\V1\Workspace\WarehouseController;
+use App\Http\Controllers\Api\V1\Webhooks\CarrierWebhookController;
 
 /*
 |--------------------------------------------------------------------------
@@ -27,7 +27,7 @@ Route::post('/v1/public/register', [PublicRegistrationController::class, 'regist
     ->name('api.v1.public.register');
 
 // Public Tenant-Scoped Endpoint: Login must run before session tokens exist
-Route::middleware(['web', 'tenant'])
+Route::middleware(['web', 'tenant', 'throttle:5,1'])
     ->prefix('v1')
     ->group(function (): void {
         Route::post('/auth/login', [AuthController::class, 'login'])->name('api.v1.auth.login');
@@ -44,16 +44,13 @@ Route::middleware(['web', 'tenant', 'auth:sanctum'])
         // The write-side employee provisioning endpoint stays inside the auth perimeter.
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
         // Phase 3.1 Driver Domain endpoints — tenant-aware, auth-protected.
-        Route::get('/drivers', [DriverController::class, 'index'])->name('drivers.index');
-        Route::post('/drivers', [DriverController::class, 'store'])->name('drivers.store');
+        Route::apiResource('drivers', DriverController::class)->only(['store']);
         // Phase 3.2 Fleet Domain endpoints — tenant-aware, auth-protected.
-        Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles.index');
-        Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
+        Route::apiResource('vehicles', VehicleController::class)->only(['store']);
         // Phase 7.1 Warehouse Domain Endpoints — tenant-aware, auth-protected
-        Route::get('/warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
-        Route::post('/warehouses', [WarehouseController::class, 'store'])->name('warehouses.store');
+        Route::apiResource('warehouses', WarehouseController::class)->only(['store']);
         // Phase 7.2 Manual Cargo Ingestion Endpoint — tenant-aware, auth-protected
-        Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+        Route::apiResource('orders', OrderController::class)->only(['store']);
         // Manifest creation must occur inside the authenticated tenant workspace.
         Route::post('/dispatches', [DispatchController::class, 'store'])->name('dispatches.store');
         Route::put('/dispatches/{dispatch}/assign', [DispatchController::class, 'assignFleet'])->name('dispatches.fleet.assign');
@@ -69,14 +66,21 @@ Route::middleware(['tenant'])
     ->prefix('v1')
     ->name('api.v1.')
     ->group(function (): void {
-        Route::get('/dispatches', [DispatchController::class, 'index'])->name('dispatches.index');
+        Route::apiResource('drivers', DriverController::class)->only(['index']);
+        Route::apiResource('vehicles', VehicleController::class)->only(['index']);
+        Route::apiResource('warehouses', WarehouseController::class)->only(['index']);
+        Route::apiResource('orders', OrderController::class)->only(['index']);
+        Route::apiResource('dispatches', DispatchController::class)->only(['index']);
+        Route::apiResource('users', UserController::class)->only(['index']);
         Route::get('/tenants/current', [TenantController::class, 'current'])->name('tenants.current');
         // FIXED: Employee roster GET is now SSR-reachable (no session cookie needed over
         // the Docker internal network) so the dashboard's active_drivers metric can
         // derive from the real database driver-role rows instead of an empty roster.
-        Route::get('/users', [UserController::class, 'index'])->name('users.index');
-        // Expose order inventory for server-side rendering (RSC) without requiring
-        // a browser session cookie. The frontend hydrator calls this during SSR
-        // using the internal Docker network and the `X-Tenant-ID` header.
-        Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     });
+
+// Catch-all terminal fallback rule for un-mapped system endpoints
+Route::fallback(function (): \Illuminate\Http\JsonResponse {
+    return response()->json([
+        'message' => 'The requested operational core endpoint does not exist or has been relocated within our architecture matrix.'
+    ], 404);
+});
