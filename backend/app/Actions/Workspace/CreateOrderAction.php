@@ -8,10 +8,9 @@ use App\Models\Order;
 
 final class CreateOrderAction
 {
-    public function __invoke(array $validated, string|int $tenantId): Order
+    public function __invoke(array $validated): Order
     {
         return Order::query()->create([
-            'tenant_id' => $tenantId,
             'warehouse_id' => $validated['warehouse_id'],
             'order_number' => $validated['order_number'],
             'customer_name' => $validated['customer_name'],

@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Webhooks\CarrierWebhookController;
 
 // Secure public gateway endpoint for third-party inbound carrier webhooks
 Route::post('/v1/webhooks/carrier/{carrier}', CarrierWebhookController::class)
+    ->middleware('throttle:60,1')
     ->name('api.v1.webhooks.carrier');
 
 // Phase 8 Public SaaS Corporate Onboarding Gate Pathway
@@ -35,7 +36,7 @@ Route::middleware(['web', 'tenant', 'throttle:5,1'])
 
 // Protected Tenant-Scoped Endpoints: Require a resolved tenant, an active web session,
 // and a valid Sanctum session so logout and identity reads operate on the real session store.
-Route::middleware(['web', 'tenant', 'auth:sanctum'])
+Route::middleware(['web', 'tenant', 'auth:sanctum', 'tenant.boundary'])
     ->prefix('v1')
     ->name('api.v1.')
     ->group(function (): void {
@@ -58,11 +59,8 @@ Route::middleware(['web', 'tenant', 'auth:sanctum'])
             ->name('dispatches.status.update');
     });
 
-// Tenant-Scoped Operational Endpoints: Tenant-resolved but NOT auth-protected.
-// The React Server Component (RSC) fetches these during SSR from the internal
-// Docker network (http://webserver) where no browser session cookie exists.
-// Authentication is implicit via the X-Tenant-ID header + network isolation.
-Route::middleware(['tenant'])
+// Tenant-Scoped Operational Endpoints: authenticated and tenant-resolved.
+Route::middleware(['web', 'tenant', 'auth:sanctum', 'tenant.boundary'])
     ->prefix('v1')
     ->name('api.v1.')
     ->group(function (): void {
@@ -73,9 +71,6 @@ Route::middleware(['tenant'])
         Route::apiResource('dispatches', DispatchController::class)->only(['index']);
         Route::apiResource('users', UserController::class)->only(['index']);
         Route::get('/tenants/current', [TenantController::class, 'current'])->name('tenants.current');
-        // FIXED: Employee roster GET is now SSR-reachable (no session cookie needed over
-        // the Docker internal network) so the dashboard's active_drivers metric can
-        // derive from the real database driver-role rows instead of an empty roster.
     });
 
 // Catch-all terminal fallback rule for un-mapped system endpoints

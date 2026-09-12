@@ -9,7 +9,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Logistics\StoreDriverRequest;
 use App\Http\Resources\DriverResource;
 use App\Models\Driver;
-use App\Support\Tenancy\TenantManager;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
 
@@ -29,7 +28,8 @@ final class DriverController extends Controller
             ->join('users', 'users.id', '=', 'drivers.user_id')
             ->orderBy('users.name', 'asc')
             ->select('drivers.*')
-            ->get();
+            ->paginate(50)
+            ->withQueryString();
 
         return DriverResource::collection($drivers);
     }
@@ -41,7 +41,7 @@ final class DriverController extends Controller
     {
         Gate::authorize('manage-operations');
 
-        $driver = ($this->createDriver)($request->validated(), app(TenantManager::class)->id);
+        $driver = ($this->createDriver)($request->validated());
 
         return new DriverResource($driver);
     }

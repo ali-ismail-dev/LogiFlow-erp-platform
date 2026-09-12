@@ -48,6 +48,7 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
       INTERNAL_BACKEND_URL: http://webserver
+      LOGIFLOW_RSC_SERVICE_TOKEN: ${LOGIFLOW_RSC_SERVICE_TOKEN}
     depends_on:
       webserver:
         condition: service_healthy

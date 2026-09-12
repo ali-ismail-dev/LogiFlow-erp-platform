@@ -31,6 +31,20 @@ final class AuthController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
+        if ($user->isRscService()) {
+            Auth::guard('web')->logout();
+            if ($request->hasSession()) {
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+            }
+
+            // Return the same response as a wrong password so the login endpoint
+            // never reveals that a dedicated RSC service principal exists.
+            throw ValidationException::withMessages([
+                'email' => __('auth.failed'),
+            ]);
+        }
+
         if ((int) $user->tenant_id !== (int) $tenantManager->id) {
             Auth::guard('web')->logout();
             if ($request->hasSession()) {

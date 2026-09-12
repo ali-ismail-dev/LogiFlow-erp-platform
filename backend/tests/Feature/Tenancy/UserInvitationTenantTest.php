@@ -7,7 +7,7 @@ declare(strict_types=1);
  * the X-Tenant-ID slug header into a numeric BIGINT tenant_id before writing.
  *
  * These tests exercise the SAME middleware stack + controller used in
- * production (TenantMiddleware → auth:sanctum → UserController@store),
+ * production (TenantContextMiddleware → auth:sanctum → TenantBoundaryMiddleware → UserController@store),
  * sidestepping the curl/Sanctum session-cookie limitation that blocks
  * an equivalent live HTTP sweep.
  */

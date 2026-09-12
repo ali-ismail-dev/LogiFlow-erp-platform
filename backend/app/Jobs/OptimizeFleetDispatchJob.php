@@ -60,14 +60,14 @@ final class OptimizeFleetDispatchJob implements ShouldQueue, ShouldBeUnique
         $tenant = Tenant::findOrFail($this->tenantId);
         app(\App\Support\Tenancy\TenantManager::class)->resolve($tenant);
 
-        $orders = $this->resolveOrders();
+        return DB::transaction(function (): Dispatch {
+            $orders = $this->resolveOrders();
 
-        // Harmonized field accessor pointing to total_weight_kg matching Phase 2 tables
-        $totalWeightKg = (float) $orders->sum(
-            static fn(Order $order): float => (float) $order->total_weight_kg
-        );
+            // Harmonized field accessor pointing to total_weight_kg matching Phase 2 tables
+            $totalWeightKg = (float) $orders->sum(
+                static fn(Order $order): float => (float) $order->total_weight_kg
+            );
 
-        return DB::transaction(function () use ($orders, $totalWeightKg): Dispatch {
             $vehicle = $this->selectVehicleForPayload($totalWeightKg);
 
             $dispatch = Dispatch::create([
@@ -91,7 +91,10 @@ final class OptimizeFleetDispatchJob implements ShouldQueue, ShouldBeUnique
 
     private function resolveOrders(): Collection
     {
-        $orders = Order::query()->whereIn('id', $this->orderIds)->get();
+        $orders = Order::query()
+            ->whereIn('id', $this->orderIds)
+            ->lockForUpdate()
+            ->get();
 
         if ($orders->count() !== count($this->orderIds)) {
             $missingIds = array_values(array_diff($this->orderIds, $orders->pluck('id')->all()));
@@ -107,24 +110,40 @@ final class OptimizeFleetDispatchJob implements ShouldQueue, ShouldBeUnique
 
     private function selectVehicleForPayload(float $totalWeightKg): Vehicle
     {
-        $vehicle = Vehicle::query()
+        $vehicleIds = Vehicle::query()
             ->where('is_active', true)
             // Harmonized with our exact migrated table column name parameter
             ->where('max_weight_capacity_kg', '>=', $totalWeightKg)
             ->orderBy('max_weight_capacity_kg')
-            ->lockForUpdate()
-            ->first();
+            ->pluck('id');
 
-        if ($vehicle === null) {
-            throw ValidationException::withMessages([
-                'order_ids' => [sprintf(
-                    'No active fleet vehicle can carry the combined batch payload of %.2fkg.',
-                    $totalWeightKg
-                )],
-            ]);
+        foreach ($vehicleIds as $vehicleId) {
+            $vehicle = Vehicle::query()->lockForUpdate()->find($vehicleId);
+
+            if ($vehicle === null || $this->vehicleHasActiveDispatch($vehicle)) {
+                continue;
+            }
+
+            return $vehicle;
         }
 
-        return $vehicle;
+        throw ValidationException::withMessages([
+            'order_ids' => [sprintf(
+                'No active fleet vehicle can carry the combined batch payload of %.2fkg.',
+                $totalWeightKg
+            )],
+        ]);
+    }
+
+    private function vehicleHasActiveDispatch(Vehicle $vehicle): bool
+    {
+        return Dispatch::query()
+            ->where('vehicle_identifier', $vehicle->license_plate)
+            ->whereIn('status', [
+                \App\Enums\DispatchStatus::Planned->value,
+                \App\Enums\DispatchStatus::InTransit->value,
+            ])
+            ->exists();
     }
 
     private function assignSequencedStops(Dispatch $dispatch, Collection $orders): void

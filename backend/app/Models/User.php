@@ -9,13 +9,14 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 #[Fillable(['tenant_id', 'role', 'name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, BelongsToTenant;
+    use HasApiTokens, HasFactory, Notifiable, BelongsToTenant;
 
     /**
      * Get the attributes that should be cast.
@@ -50,5 +51,10 @@ class User extends Authenticatable
     public function isDriver(): bool
     {
         return $this->role === UserRole::Driver;
+    }
+
+    public function isRscService(): bool
+    {
+        return $this->role === UserRole::RscService;
     }
 }

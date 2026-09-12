@@ -85,7 +85,7 @@ class DispatchControllerTest extends TestCase
             'order_ids' => [$firstOrder->id, $secondOrder->id],
             'driver_id' => $driver->id,
             'vehicle_id' => $vehicle->id,
-        ]);
+        ], ['X-Tenant-ID' => 'acme-fleet']);
 
         $response->assertStatus(201);
 
@@ -156,7 +156,7 @@ class DispatchControllerTest extends TestCase
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/v1/dispatches', [
             'order_ids' => [$firstOrder->id, $secondOrder->id],
-        ]);
+        ], ['X-Tenant-ID' => 'acme-fleet']);
 
         $response->assertStatus(201);
 
@@ -226,7 +226,8 @@ class DispatchControllerTest extends TestCase
             [
                 'driver_id' => $driver->id,
                 'vehicle_id' => $vehicle->id,
-            ]
+            ],
+            ['X-Tenant-ID' => 'northwind-logistics']
         );
 
         $response->assertStatus(200);
@@ -309,7 +310,8 @@ class DispatchControllerTest extends TestCase
 
         $response = $this->actingAs($user, 'sanctum')->patchJson(
             "/api/v1/dispatches/{$dispatch->id}/status",
-            ['status' => 'completed']
+            ['status' => 'completed'],
+            ['X-Tenant-ID' => 'northwind-logistics']
         );
 
         $response->assertStatus(200);

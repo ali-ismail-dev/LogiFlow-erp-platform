@@ -2,17 +2,24 @@ import type { Dispatch, OperationalMetrics, LedgerLogEntry } from "@/types/logis
 import type { AuthUser } from "@/hooks/useRBAC";
 import { DashboardLiveSync } from "../../../components/dashboard/DashboardLiveSync";
 import { DashboardSecurityBoundary } from "../../../components/dashboard/DashboardSecurityBoundary";
+import {
+  fetchLogiflow,
+  MissingLogiflowServiceTokenError,
+} from "@/lib/server/logiflow-fetch";
+
+class MissingTenantContextError extends Error {
+  constructor(tenantSlug: string) {
+    super(
+      `Tenant context could not be resolved for "${tenantSlug}". ` +
+        "The RSC fetch to /api/v1/tenants/current did not return a tenant. " +
+        "Verify that LOGIFLOW_RSC_SERVICE_TOKEN is present and scoped to this tenant.",
+    );
+    this.name = "MissingTenantContextError";
+  }
+}
 
 interface DashboardPageProps {
   params: { tenant: string };
-}
-
-function formatTenantName(tenant: string): string {
-  if (!tenant) return "Logistics Workspace";
-  return tenant
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 /**
@@ -28,10 +35,10 @@ async function fetchFromBackend<T>(tenant: string, path: string): Promise<T | nu
 
   for (const baseUrl of urls) {
     try {
-      const res = await fetch(`${baseUrl}${path}`, {
+      const res = await fetchLogiflow(`${baseUrl}${path}`, {
+        tenant,
         headers: {
           "Accept": "application/json",
-          "X-Tenant-ID": tenant,
         },
         next: { revalidate: 0 },
         signal: AbortSignal.timeout(3000)
@@ -42,6 +49,10 @@ async function fetchFromBackend<T>(tenant: string, path: string): Promise<T | nu
         return envelope.data;
       }
     } catch (err) {
+      if (err instanceof MissingLogiflowServiceTokenError) {
+        throw err;
+      }
+
       // Pass down cleanly to next proxy fallback link
     }
   }
@@ -51,18 +62,20 @@ async function fetchFromBackend<T>(tenant: string, path: string): Promise<T | nu
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const { tenant } = params;
 
-  // Hydrate data concurrently. Note: /auth/me will return null over internal Docker network,
-  // which is expected. The client-side hook will complete browser-level authentication.
-  const [dispatches, tenantInfo, authUser, usersRoster] = await Promise.all([
+  // Hydrate dispatches, tenant context, and users concurrently with the RSC service token.
+  // The authenticated human user is resolved exclusively on the client by useRBAC / DashboardLiveSync.
+  const [dispatches, tenantInfo, usersRoster] = await Promise.all([
     fetchFromBackend<Dispatch[]>(tenant, "/api/v1/dispatches"),
     fetchFromBackend<{ id: number; slug: string }>(tenant, "/api/v1/tenants/current"),
-    fetchFromBackend<AuthUser>(tenant, "/api/v1/auth/me"),
     fetchFromBackend<AuthUser[]>(tenant, "/api/v1/users"),
   ]);
 
   const resolvedDispatches = dispatches || [];
   const resolvedUsers = usersRoster || [];
-  const resolvedTenantId = tenantInfo ? String(tenantInfo.id) : "11";
+  if (!tenantInfo) {
+    throw new MissingTenantContextError(tenant);
+  }
+  const resolvedTenantId = String(tenantInfo.id);
 
   const metrics: OperationalMetrics = {
     total_dispatches: resolvedDispatches.length,
@@ -83,7 +96,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
             initialEntries={ledgerEntries}
             tenantSlug={tenant}
             tenantId={resolvedTenantId}
-            authUser={authUser}
+            authUser={null}
             usersRoster={resolvedUsers}
           />
         </main>

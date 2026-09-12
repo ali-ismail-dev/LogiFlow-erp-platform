@@ -9,7 +9,7 @@ use App\Models\Dispatch;
 use App\Models\User;
 use App\Enums\UserRole;
 use Illuminate\Support\Facades\Gate;
-use App\Actions\Dispatches\DispatchOrdersAction;
+use App\Actions\Dispatch\DispatchOrdersAction;
 
 class AppServiceProvider extends ServiceProvider
 {

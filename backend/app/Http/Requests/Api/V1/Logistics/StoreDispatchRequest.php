@@ -16,8 +16,8 @@ final class StoreDispatchRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'order_ids' => ['required', 'array'],
-            'order_ids.*' => ['integer', 'exists:orders,id'],
+            'order_ids' => ['required', 'array', 'max:250'],
+            'order_ids.*' => ['integer', 'distinct', 'exists:orders,id'],
             'driver_id' => ['nullable', 'integer', 'exists:drivers,id'],
             'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
         ];

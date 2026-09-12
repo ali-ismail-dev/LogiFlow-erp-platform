@@ -17,8 +17,14 @@ final class StoreDriverRequest extends FormRequest
 
     public function rules(): array
     {
+        $tenantId = app(\App\Support\Tenancy\TenantManager::class)->id;
+
         return [
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => [
+                'required',
+                'integer',
+                Rule::exists('users', 'id')->where(fn($query) => $query->where('tenant_id', $tenantId)),
+            ],
             'license_number' => ['required', 'string', 'max:50'],
             'phone_number' => ['required', 'string', 'max:30'],
             'status' => ['sometimes', Rule::enum(DriverStatus::class)],

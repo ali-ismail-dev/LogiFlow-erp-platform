@@ -2,11 +2,37 @@
 
 namespace Tests;
 
+use App\Support\Tenancy\TenantManager;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Event;
 use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        app(TenantManager::class)->clear();
+
+        foreach (
+            [
+                \App\Models\User::class,
+                \App\Models\Vehicle::class,
+                \App\Models\Driver::class,
+                \App\Models\Warehouse::class,
+                \App\Models\Order::class,
+                \App\Models\Dispatch::class,
+            ] as $modelClass
+        ) {
+            Event::listen('eloquent.creating: ' . $modelClass, static function ($model): void {
+                if ($model->tenant_id !== null) {
+                    app(TenantManager::class)->setTenantId($model->tenant_id);
+                }
+            });
+        }
+    }
+
     /**
      * Create the application and immediately verify the test database
      * connection is SQLite before any test trait (RefreshDatabase) can run

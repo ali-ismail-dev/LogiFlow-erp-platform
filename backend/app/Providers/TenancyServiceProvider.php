@@ -62,7 +62,7 @@ final class TenancyServiceProvider extends ServiceProvider
         // - Telescope / Pulse tagging
         // - Activity log tenant enrichment
         //
-        // Phase 1 intentionally keeps this empty because TenantMiddleware
+        // Phase 1 intentionally keeps this empty because TenantContextMiddleware
         // becomes responsible for populating the TenantManager after the
         // HTTP request has been identified.
         //

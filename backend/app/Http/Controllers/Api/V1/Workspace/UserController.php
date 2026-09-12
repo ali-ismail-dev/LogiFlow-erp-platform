@@ -23,7 +23,8 @@ final class UserController extends Controller
     {
         $users = User::query()
             ->orderBy('name', 'asc')
-            ->get();
+            ->paginate(50)
+            ->withQueryString();
 
         return UserResource::collection($users);
     }

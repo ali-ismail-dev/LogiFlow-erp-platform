@@ -20,12 +20,16 @@ final class StoreOrderRequest extends FormRequest
         $tenantId = app(TenantManager::class)->id;
 
         return [
-            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'warehouse_id' => [
+                'required',
+                'integer',
+                Rule::exists('warehouses', 'id')->where(fn($query) => $query->where('tenant_id', $tenantId)),
+            ],
             'order_number' => [
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('orders', 'order_number')->where(fn ($query) => $query->where('tenant_id', $tenantId)),
+                Rule::unique('orders', 'order_number')->where(fn($query) => $query->where('tenant_id', $tenantId)),
             ],
             'customer_name' => ['required', 'string', 'max:255'],
             'total_weight_kg' => ['required', 'numeric', 'gt:0'],

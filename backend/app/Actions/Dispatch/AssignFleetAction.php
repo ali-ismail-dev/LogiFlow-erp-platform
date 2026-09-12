@@ -9,6 +9,7 @@ use App\Models\Dispatch;
 use App\Models\Driver;
 use App\Models\Vehicle;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 final class AssignFleetAction
 {
@@ -18,10 +19,23 @@ final class AssignFleetAction
             $dispatch = Dispatch::query()
                 ->where('tenant_id', $tenantId)
                 ->whereKey($id)
+                ->lockForUpdate()
                 ->firstOrFail();
 
             $driver = Driver::query()->whereKey($validated['driver_id'])->firstOrFail();
-            $vehicle = Vehicle::query()->whereKey($validated['vehicle_id'])->firstOrFail();
+            $vehicle = Vehicle::query()->whereKey($validated['vehicle_id'])->lockForUpdate()->firstOrFail();
+
+            $vehicleIsAssigned = Dispatch::query()
+                ->whereKeyNot($dispatch->id)
+                ->where('vehicle_identifier', $vehicle->license_plate)
+                ->whereIn('status', ['planned', 'in_transit'])
+                ->exists();
+
+            if ($vehicleIsAssigned) {
+                throw ValidationException::withMessages([
+                    'vehicle_id' => ['The selected vehicle is already assigned to an active dispatch.'],
+                ]);
+            }
 
             $dispatch->update([
                 'driver_name' => $driver->user?->name,
@@ -30,7 +44,9 @@ final class AssignFleetAction
             ]);
 
             $dispatch->load(['warehouse', 'stops', 'orders']);
-            event(new DispatchMovementUpdated($dispatch));
+            DB::afterCommit(function () use ($dispatch): void {
+                DispatchMovementUpdated::dispatch($dispatch);
+            });
 
             return $dispatch->fresh();
         });

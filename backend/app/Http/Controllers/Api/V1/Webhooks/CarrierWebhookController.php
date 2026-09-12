@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Webhooks\CarrierWebhookRequest;
 use App\Models\Dispatch;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Carbon;
 use RuntimeException;
 
 final class CarrierWebhookController extends Controller
@@ -26,6 +27,14 @@ final class CarrierWebhookController extends Controller
             ], 401);
         }
 
+        $statusTimestamp = Carbon::parse($request->validated('status_timestamp'));
+
+        if ($statusTimestamp->lt(now()->subMinutes(5)) || $statusTimestamp->gt(now()->addMinutes(5))) {
+            return response()->json([
+                'message' => 'The webhook timestamp is outside the permitted five-minute window.',
+            ], 422);
+        }
+
         $dispatch = Dispatch::withoutTenancy()
             ->where('carrier_waybill_reference', $request->input('carrier_waybill_reference'))
             ->first();
@@ -40,6 +49,10 @@ final class CarrierWebhookController extends Controller
             $dispatch = ($this->processWebhook)($dispatch, $carrier, $request->validated());
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        if ($dispatch === null) {
+            return response()->json(['message' => 'Already processed'], 200);
         }
 
         DispatchMovementUpdated::dispatch($dispatch);

@@ -120,7 +120,13 @@ final class SecurityIdentityIntegrationTest extends TestCase
             'is_active' => true,
         ]);
 
-        $response = $this->getJson('/api/v1/tenants/current', ['X-Tenant-ID' => 'nike']);
+        $user = User::factory()->create([
+            'tenant_id' => $tenant->id,
+            'role' => UserRole::SuperAdmin,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson('/api/v1/tenants/current', ['X-Tenant-ID' => 'nike']);
 
         $response
             ->assertOk()

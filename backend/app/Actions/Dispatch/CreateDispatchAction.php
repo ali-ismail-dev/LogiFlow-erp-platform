@@ -6,6 +6,7 @@ namespace App\Actions\Dispatch;
 
 use App\Enums\OrderStatus;
 use App\Enums\StopStatus;
+use App\Enums\DispatchStatus;
 use App\Models\Dispatch;
 use App\Models\Driver;
 use App\Models\Order;
@@ -13,6 +14,7 @@ use App\Models\Stop;
 use App\Models\Vehicle;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use RuntimeException;
 
 final class CreateDispatchAction
 {
@@ -24,8 +26,16 @@ final class CreateDispatchAction
                 : null;
 
             $vehicle = isset($validated['vehicle_id'])
-                ? Vehicle::query()->whereKey($validated['vehicle_id'])->firstOrFail()
+                ? Vehicle::query()->whereKey($validated['vehicle_id'])->lockForUpdate()->firstOrFail()
                 : null;
+
+            if ($vehicle !== null && Dispatch::query()
+                ->where('vehicle_identifier', $vehicle->license_plate)
+                ->whereIn('status', [DispatchStatus::Planned->value, DispatchStatus::InTransit->value])
+                ->exists()
+            ) {
+                throw new RuntimeException('The selected vehicle is already assigned to an active dispatch.');
+            }
 
             $dispatch = Dispatch::query()->create([
                 'tenant_id' => $tenantId,
@@ -44,6 +54,8 @@ final class CreateDispatchAction
                 ->get()
                 ->keyBy('id');
 
+            $stops = [];
+            $now = now();
             $sequence = 1;
 
             foreach ($orderIds as $orderId) {
@@ -53,28 +65,35 @@ final class CreateDispatchAction
                     throw new NotFoundHttpException("Order #{$orderId} was not found in the active tenant scope.");
                 }
 
-                $order->update([
-                    'status' => OrderStatus::Dispatched->value,
-                    'dispatch_id' => $dispatch->id,
-                ]);
-
-                Stop::create([
+                $stops[] = [
                     'tenant_id' => $tenantId,
                     'dispatch_id' => $dispatch->id,
                     'order_id' => $order->id,
                     'sequence' => $sequence,
-                    'destination_address' => $order->shipping_address ?? [
+                    'destination_address' => json_encode($order->shipping_address ?? [
                         'street' => null,
                         'city' => null,
                         'state' => null,
                         'postal_code' => null,
                         'country' => null,
-                    ],
+                    ], JSON_THROW_ON_ERROR),
                     'status' => StopStatus::Pending->value,
-                ]);
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
 
                 $sequence++;
             }
+
+            Order::query()
+                ->whereIn('id', $orderIds)
+                ->update([
+                    'status' => OrderStatus::Dispatched->value,
+                    'dispatch_id' => $dispatch->id,
+                    'updated_at' => $now,
+                ]);
+
+            Stop::query()->insert($stops);
 
             return $dispatch->fresh();
         });

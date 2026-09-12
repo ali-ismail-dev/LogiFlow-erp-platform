@@ -28,9 +28,12 @@ final class StoreUserRequest extends FormRequest
                 'string',
                 'email',
                 'max:255',
-                Rule::unique('users')->where(fn ($query) => $query->where('tenant_id', $tenantId)),
+                Rule::unique('users')->where(fn($query) => $query->where('tenant_id', $tenantId)),
             ],
-            'role' => ['required', new Enum(UserRole::class)],
+            // The RSC service role is a machine identity and must only be provisioned
+            // via `php artisan logiflow:rsc-token`. It is intentionally excluded here
+            // so it cannot be minted through the human user-provisioning API.
+            'role' => ['required', (new Enum(UserRole::class))->except([UserRole::RscService])],
         ];
     }
 }

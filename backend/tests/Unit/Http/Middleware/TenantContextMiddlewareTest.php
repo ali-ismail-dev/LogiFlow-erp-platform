@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Http\Middleware;
 
 use App\Exceptions\TenantContextNotResolvedException;
-use App\Http\Middleware\TenantMiddleware;
+use App\Http\Middleware\TenantContextMiddleware;
 use App\Models\Tenant;
 use App\Support\Tenancy\TenantManager;
 use App\Support\Tenancy\TenantResolver;
@@ -15,20 +15,20 @@ use Symfony\Component\HttpFoundation\Response;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
-final class TenantMiddlewareTest extends TestCase
+final class TenantContextMiddlewareTest extends TestCase
 {
     use RefreshDatabase;
 
     private TenantManager $tenantManager;
     private TenantResolver $tenantResolver;
-    private TenantMiddleware $middleware;
+    private TenantContextMiddleware $middleware;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->tenantManager = $this->app->make(TenantManager::class);
         $this->tenantResolver = $this->app->make(TenantResolver::class);
-        $this->middleware = new TenantMiddleware($this->tenantManager, $this->tenantResolver);
+        $this->middleware = new TenantContextMiddleware($this->tenantManager, $this->tenantResolver);
     }
 
     #[Test]

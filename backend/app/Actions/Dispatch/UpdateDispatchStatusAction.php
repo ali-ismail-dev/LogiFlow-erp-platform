@@ -19,6 +19,7 @@ final class UpdateDispatchStatusAction
             $dispatch = Dispatch::query()
                 ->where('tenant_id', $tenantId)
                 ->whereKey($id)
+                ->lockForUpdate()
                 ->firstOrFail();
 
             $dispatch->status = $validated['status'];
@@ -40,7 +41,9 @@ final class UpdateDispatchStatusAction
 
             $dispatch->save();
             $dispatch->load(['warehouse', 'stops', 'orders']);
-            event(new DispatchMovementUpdated($dispatch));
+            DB::afterCommit(function () use ($dispatch): void {
+                DispatchMovementUpdated::dispatch($dispatch);
+            });
 
             return $dispatch->fresh();
         });

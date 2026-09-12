@@ -10,7 +10,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Workspace\StoreOrderRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
-use App\Support\Tenancy\TenantManager;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -29,7 +28,8 @@ final class OrderController extends Controller
             ->whereIn('status', [OrderStatus::Pending->value, OrderStatus::Processing->value])
             ->whereNull('dispatch_id')
             ->orderBy('promised_at', 'asc')
-            ->get();
+            ->paginate(50)
+            ->withQueryString();
 
         return OrderResource::collection($orders);
     }
@@ -37,8 +37,7 @@ final class OrderController extends Controller
     public function store(StoreOrderRequest $request): OrderResource
     {
         $order = ($this->createOrder)(
-            $request->validated(),
-            app(TenantManager::class)->id
+            $request->validated()
         );
 
         return new OrderResource($order);

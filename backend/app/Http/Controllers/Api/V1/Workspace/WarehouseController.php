@@ -21,7 +21,10 @@ final class WarehouseController extends Controller
 
     public function index(): AnonymousResourceCollection
     {
-        $warehouses = Warehouse::query()->orderBy('name', 'asc')->get();
+        $warehouses = Warehouse::query()
+            ->orderBy('name', 'asc')
+            ->paginate(50)
+            ->withQueryString();
 
         return WarehouseResource::collection($warehouses);
     }

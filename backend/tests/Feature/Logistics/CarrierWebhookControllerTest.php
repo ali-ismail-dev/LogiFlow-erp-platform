@@ -74,6 +74,30 @@ class CarrierWebhookControllerTest extends TestCase
     }
 
     #[Test]
+    public function it_does_not_apply_the_same_webhook_event_twice(): void
+    {
+        Event::fake([DispatchMovementUpdated::class]);
+
+        $dispatch = Dispatch::factory()->create([
+            'carrier_waybill_reference' => 'WAYBILL-IDEMPOTENT',
+        ]);
+
+        $payload = [
+            'carrier_waybill_reference' => $dispatch->carrier_waybill_reference,
+            'status' => CarrierShipmentStatus::InTransit->value,
+            'status_timestamp' => now()->toIso8601String(),
+        ];
+
+        $this->postSignedWebhook($payload)->assertOk();
+        $this->postSignedWebhook($payload)
+            ->assertOk()
+            ->assertJson(['message' => 'Already processed']);
+
+        Event::assertDispatchedTimes(DispatchMovementUpdated::class, 1);
+        $this->assertDatabaseCount('carrier_webhook_events', 1);
+    }
+
+    #[Test]
     public function it_returns_422_if_stop_sequence_is_provided_but_not_found(): void
     {
         $dispatch = Dispatch::factory()->create([

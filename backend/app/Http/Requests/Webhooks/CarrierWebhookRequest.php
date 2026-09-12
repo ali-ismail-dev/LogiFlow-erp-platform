@@ -15,13 +15,24 @@ final class CarrierWebhookRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->filled('event_id')) {
+            $this->merge([
+                'event_id' => hash('sha256', $this->getContent()),
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [
+            'event_id' => ['required', 'string', 'max:255'],
             'carrier_waybill_reference' => ['required', 'string', 'min:1'],
             'stop_sequence' => ['nullable', 'integer', 'min:1'],
             'status' => ['required', 'string', Rule::enum(CarrierShipmentStatus::class)],
             'status_timestamp' => ['required', 'date'],
+            'payload' => ['sometimes', 'array', 'max:50'],
             'location_description' => ['nullable', 'string'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],

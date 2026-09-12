@@ -30,6 +30,7 @@ class Dispatch extends Model
         'ledger_error',
         'ledger_failed_at',
         'carrier_waybill_reference',
+        'carrier_status_timestamp',
         'scheduled_at',
         'departed_at',
         'completed_at',
@@ -41,6 +42,7 @@ class Dispatch extends Model
             'scheduled_at' => 'immutable_datetime',
             'departed_at' => 'immutable_datetime',
             'completed_at' => 'immutable_datetime',
+            'carrier_status_timestamp' => 'immutable_datetime',
         ];
     }
 

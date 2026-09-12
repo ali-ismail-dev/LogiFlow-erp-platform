@@ -9,6 +9,7 @@ use App\Enums\Logistics\CarrierShipmentStatus;
 use App\Models\Dispatch;
 use App\Models\Stop;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use RuntimeException;
 
 final class ProcessCarrierWebhookAction
@@ -17,7 +18,7 @@ final class ProcessCarrierWebhookAction
      * @param array<string, mixed> $validated
      * @throws RuntimeException When the dispatch has no stop at that sequence.
      */
-    public function __invoke(Dispatch $dispatch, string $carrier, array $validated): Dispatch
+    public function __invoke(Dispatch $dispatch, string $carrier, array $validated): ?Dispatch
     {
         $trackingUpdate = CarrierTrackingUpdate::fromArray([
             ...$validated,
@@ -26,13 +27,46 @@ final class ProcessCarrierWebhookAction
 
         $stopSequence = $validated['stop_sequence'] ?? null;
 
-        DB::transaction(function () use ($dispatch, $stopSequence, $trackingUpdate): void {
+        $wasApplied = DB::transaction(function () use ($dispatch, $carrier, $validated, $stopSequence, $trackingUpdate): bool {
+            $dispatch = $dispatch->newQueryWithoutScopes()
+                ->lockForUpdate()
+                ->findOrFail($dispatch->id);
+
+            $inserted = DB::table('carrier_webhook_events')->insertOrIgnore([
+                'carrier' => $carrier,
+                'event_id' => $validated['event_id'],
+                'dispatch_id' => $dispatch->id,
+                'status_timestamp' => $trackingUpdate->statusTimestamp,
+                'processed_at' => now(),
+            ]);
+
+            if ($inserted === 0) {
+                return false;
+            }
+
+            if (
+                $dispatch->carrier_status_timestamp !== null
+                && $dispatch->carrier_status_timestamp->gte(Carbon::instance($trackingUpdate->statusTimestamp))
+            ) {
+                return false;
+            }
+
             if ($stopSequence !== null) {
                 $this->applyStopLevelUpdate($dispatch, $stopSequence, $trackingUpdate);
             } else {
                 $this->applyDispatchLevelUpdate($dispatch, $trackingUpdate);
             }
+
+            $dispatch->update([
+                'carrier_status_timestamp' => $trackingUpdate->statusTimestamp,
+            ]);
+
+            return true;
         });
+
+        if (! $wasApplied) {
+            return null;
+        }
 
         return $dispatch->newQueryWithoutScopes()
             ->with([
@@ -48,7 +82,11 @@ final class ProcessCarrierWebhookAction
     private function applyStopLevelUpdate(Dispatch $dispatch, int $stopSequence, CarrierTrackingUpdate $update): void
     {
         /** @var Stop|null $stop */
-        $stop = $dispatch->stops()->withoutTenancy()->where('sequence', $stopSequence)->first();
+        $stop = $dispatch->stops()
+            ->withoutTenancy()
+            ->where('sequence', $stopSequence)
+            ->lockForUpdate()
+            ->first();
 
         if ($stop === null) {
             throw new RuntimeException(sprintf(

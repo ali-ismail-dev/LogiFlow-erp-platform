@@ -23,7 +23,8 @@ final class VehicleController extends Controller
     {
         $vehicles = Vehicle::query()
             ->orderBy('name', 'asc')
-            ->get();
+            ->paginate(50)
+            ->withQueryString();
 
         return VehicleResource::collection($vehicles);
     }

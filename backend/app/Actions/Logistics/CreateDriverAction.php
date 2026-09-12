@@ -6,13 +6,21 @@ namespace App\Actions\Logistics;
 
 use App\Enums\DriverStatus;
 use App\Models\Driver;
+use App\Models\User;
+use App\Support\Tenancy\TenantManager;
 
 final class CreateDriverAction
 {
-    public function __invoke(array $validated, string|int $tenantId): Driver
+    public function __invoke(array $validated): Driver
     {
+        $tenantId = app(TenantManager::class)->id;
+
+        $user = User::query()
+            ->where('id', $validated['user_id'])
+            ->where('tenant_id', $tenantId)
+            ->firstOrFail();
+
         return Driver::create([
-            'tenant_id' => $tenantId,
             'user_id' => $validated['user_id'],
             'license_number' => $validated['license_number'],
             'phone_number' => $validated['phone_number'],

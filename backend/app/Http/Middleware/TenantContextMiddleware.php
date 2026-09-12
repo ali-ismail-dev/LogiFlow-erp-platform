@@ -12,7 +12,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-final class TenantMiddleware
+final class TenantContextMiddleware
 {
     public function __construct(
         private readonly TenantManager $tenantManager,
@@ -29,15 +29,23 @@ final class TenantMiddleware
 
         if ($this->tenantManager->check()) {
             if ($slug === null) {
-                return $next($request);
+                if ($request->route() === null) {
+                    $tenant = $this->tenantManager->getTenant();
+                } else {
+                    $this->tenantManager->forget();
+                }
+            } else {
+                $currentTenant = $this->tenantManager->getTenant();
+                if ($currentTenant?->slug === $slug) {
+                    $tenant = $currentTenant;
+                } else {
+                    $this->tenantManager->forget();
+                }
             }
 
-            $currentTenant = $this->tenantManager->getTenant();
-            if ($currentTenant?->slug === $slug) {
+            if ($this->tenantManager->check()) {
                 return $next($request);
             }
-
-            $this->tenantManager->forget();
         }
 
         if ($slug === null) {

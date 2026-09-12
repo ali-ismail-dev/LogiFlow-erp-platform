@@ -24,10 +24,6 @@ trait BelongsToTenant
         static::addGlobalScope(new TenantScope());
 
         static::creating(function (Model $model): void {
-            if (! is_null($model->getAttribute('tenant_id'))) {
-                return;
-            }
-
             $tenantManager = app(TenantManager::class);
 
             if (! $tenantManager->check()) {

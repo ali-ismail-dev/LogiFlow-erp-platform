@@ -72,11 +72,10 @@ final class FleetMatrixIntegrationTest extends TestCase
         $response->assertJsonPath('data.0.license_plate', 'NKE-111');
         $response->assertJsonPath('data.0.is_active', true);
 
-        $crossTenantResponse = $this->actingAs($adidasUser)
+        $crossTenantResponse = $this->actingAs($nikeUser)
             ->getJson('/api/v1/vehicles', ['X-Tenant-ID' => 'adidas']);
 
-        $crossTenantResponse->assertOk();
-        $crossTenantResponse->assertJsonCount(0, 'data');
+        $crossTenantResponse->assertForbidden();
     }
 
     #[Test]
