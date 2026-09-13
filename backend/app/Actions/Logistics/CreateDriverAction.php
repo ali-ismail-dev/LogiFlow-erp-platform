@@ -15,6 +15,7 @@ final class CreateDriverAction
     {
         $tenantId = app(TenantManager::class)->id;
 
+        // Verify the user belongs to this tenant. Throws 404 if not.
         $user = User::query()
             ->where('id', $validated['user_id'])
             ->where('tenant_id', $tenantId)

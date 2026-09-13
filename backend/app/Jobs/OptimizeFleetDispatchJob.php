@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\OrderStatus;
 use App\Models\Dispatch;
 use App\Models\Order;
 use App\Models\Stop;
@@ -12,7 +13,6 @@ use App\Models\Vehicle;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Bus\Queueable;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -50,7 +50,6 @@ final class OptimizeFleetDispatchJob implements ShouldQueue, ShouldBeUnique
     }
 
     /**
-     * @throws ModelNotFoundException
      * @throws RuntimeException
      * @throws ValidationException
      */
@@ -72,7 +71,6 @@ final class OptimizeFleetDispatchJob implements ShouldQueue, ShouldBeUnique
 
             $dispatch = Dispatch::create([
                 // Maps our exact Phase 2 table identifiers
-                'tenant_id' => $this->tenantId,
                 'warehouse_id' => $orders->first()->warehouse_id,
                 'reference_code' => 'DSP-' . strtoupper(uniqid()),
                 'vehicle_identifier' => $vehicle->license_plate,
@@ -82,6 +80,14 @@ final class OptimizeFleetDispatchJob implements ShouldQueue, ShouldBeUnique
             ]);
 
             $this->assignSequencedStops($dispatch, $orders);
+
+            Order::query()
+                ->whereIn('id', $orders->pluck('id')->all())
+                ->update([
+                    'status' => OrderStatus::Dispatched->value,
+                    'dispatch_id' => $dispatch->id,
+                    'updated_at' => now(),
+                ]);
 
             return $dispatch->load([
                 'stops' => static fn(HasMany $query): HasMany => $query->orderBy('sequence')->with('order'),
@@ -93,12 +99,17 @@ final class OptimizeFleetDispatchJob implements ShouldQueue, ShouldBeUnique
     {
         $orders = Order::query()
             ->whereIn('id', $this->orderIds)
+            ->whereNull('dispatch_id')
+            ->whereIn('status', [OrderStatus::Pending->value, OrderStatus::Processing->value])
             ->lockForUpdate()
             ->get();
 
         if ($orders->count() !== count($this->orderIds)) {
             $missingIds = array_values(array_diff($this->orderIds, $orders->pluck('id')->all()));
-            throw (new ModelNotFoundException())->setModel(Order::class, $missingIds);
+            throw new RuntimeException(sprintf(
+                'Refusing to dispatch orders [%s]: one or more are already dispatched or not in a dispatchable state.',
+                implode(', ', $missingIds),
+            ));
         }
 
         if ($orders->pluck('tenant_id')->unique()->count() > 1) {
@@ -152,19 +163,24 @@ final class OptimizeFleetDispatchJob implements ShouldQueue, ShouldBeUnique
             ->sortBy(static fn(Order $order) => $order->delivery_window_start)
             ->values();
 
-        $sequence = 1;
+        $stops = [];
+        $now = now();
 
         foreach ($sorted as $order) {
-            Stop::create([
+            $stops[] = [
                 'tenant_id' => $this->tenantId,
                 'dispatch_id' => $dispatch->id,
                 'order_id' => $order->id,
-                'sequence' => $sequence,
-                'destination_address' => $order->shipping_address,
+                'sequence' => count($stops) + 1,
+                'destination_address' => is_array($order->shipping_address)
+                    ? json_encode($order->shipping_address, JSON_THROW_ON_ERROR)
+                    : $order->shipping_address,
                 'status' => \App\Enums\StopStatus::Pending->value,
-            ]);
-
-            $sequence++;
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
+
+        Stop::query()->insert($stops);
     }
 }
