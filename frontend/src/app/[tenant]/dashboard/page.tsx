@@ -1,5 +1,6 @@
 import type { Dispatch, OperationalMetrics, LedgerLogEntry } from "@/types/logistics";
 import type { AuthUser } from "@/hooks/useRBAC";
+import { headers } from "next/headers";
 import { DashboardLiveSync } from "../../../components/dashboard/DashboardLiveSync";
 import { DashboardSecurityBoundary } from "../../../components/dashboard/DashboardSecurityBoundary";
 import {
@@ -61,6 +62,13 @@ async function fetchFromBackend<T>(tenant: string, path: string): Promise<T | nu
 
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const { tenant } = params;
+
+  const host = headers().get("host") ?? "";
+  const subdomain = host.split(":")[0].split(".")[0];
+
+  if (subdomain && subdomain !== tenant) {
+    throw new MissingTenantContextError(tenant);
+  }
 
   // Hydrate dispatches, tenant context, and users concurrently with the RSC service token.
   // The authenticated human user is resolved exclusively on the client by useRBAC / DashboardLiveSync.

@@ -16,6 +16,7 @@ final class IssueRscServiceToken extends Command
         {action : One of issue, list, or revoke}
         {id? : Personal access token ID for revoke}
         {--tenant= : Tenant slug or numeric ID}
+        {--global : Issue a token for the global RSC service principal (all tenants)}
         {--name= : Token name for issue}
         {--abilities= : Comma-separated subset of the default RSC abilities}
         {--all : Revoke all tokens for the selected tenant}
@@ -58,6 +59,28 @@ final class IssueRscServiceToken extends Command
 
     private function issue(): int
     {
+        $global = (bool) $this->option('global');
+
+        if (! $global && ! $this->option('tenant')) {
+            return $this->userError('Either --tenant or --global must be supplied.');
+        }
+
+        if ($global) {
+            $abilities = $this->abilities();
+            if ($abilities === null) {
+                return 1;
+            }
+
+            $user = $this->servicePrincipal->ensureGlobal();
+            $name = (string) ($this->option('name') ?: 'rsc-global-' . now()->format('Ymd-His'));
+            $token = $user->createToken($name, $abilities);
+
+            $this->output->writeln($token->plainTextToken);
+            $this->errorOutput('Copy this token now; it will never be shown again.');
+
+            return 0;
+        }
+
         $tenant = $this->tenant();
         if ($tenant === null) {
             return 1;
@@ -80,14 +103,27 @@ final class IssueRscServiceToken extends Command
 
     private function listTokens(): int
     {
-        $tenant = $this->tenant();
-        if ($tenant === null) {
-            return 1;
+        $global = (bool) $this->option('global');
+
+        if (! $global && ! $this->option('tenant')) {
+            return $this->userError('Either --tenant or --global must be supplied.');
         }
 
-        $user = $this->servicePrincipal->findForTenant($tenant);
-        if ($user === null) {
-            return $this->userError('The RSC service principal does not exist for this tenant.');
+        if ($global) {
+            $user = $this->servicePrincipal->findGlobal();
+            if ($user === null) {
+                return $this->userError('The global RSC service principal does not exist.');
+            }
+        } else {
+            $tenant = $this->tenant();
+            if ($tenant === null) {
+                return 1;
+            }
+
+            $user = $this->servicePrincipal->findForTenantLegacy($tenant);
+            if ($user === null) {
+                return $this->userError('The RSC service principal does not exist for this tenant.');
+            }
         }
 
         $this->table(
@@ -106,14 +142,27 @@ final class IssueRscServiceToken extends Command
 
     private function revoke(mixed $tokenId): int
     {
-        $tenant = $this->tenant();
-        if ($tenant === null) {
-            return 1;
+        $global = (bool) $this->option('global');
+
+        if (! $global && ! $this->option('tenant')) {
+            return $this->userError('Either --tenant or --global must be supplied.');
         }
 
-        $user = $this->servicePrincipal->findForTenant($tenant);
-        if ($user === null) {
-            return $this->userError('The RSC service principal does not exist for this tenant.');
+        if ($global) {
+            $user = $this->servicePrincipal->findGlobal();
+            if ($user === null) {
+                return $this->userError('The global RSC service principal does not exist.');
+            }
+        } else {
+            $tenant = $this->tenant();
+            if ($tenant === null) {
+                return 1;
+            }
+
+            $user = $this->servicePrincipal->findForTenantLegacy($tenant);
+            if ($user === null) {
+                return $this->userError('The RSC service principal does not exist for this tenant.');
+            }
         }
 
         if ((bool) $this->option('all')) {
@@ -121,7 +170,7 @@ final class IssueRscServiceToken extends Command
                 return $this->userError('Do not provide an ID when using --all.');
             }
 
-            if (! $this->confirmRevoke('all tokens for this tenant')) {
+            if (! $this->confirmRevoke($global ? 'all global tokens' : 'all tokens for this tenant')) {
                 return 1;
             }
 
@@ -136,7 +185,7 @@ final class IssueRscServiceToken extends Command
 
         $token = $user->tokens()->whereKey((int) $tokenId)->first();
         if ($token === null) {
-            return $this->userError('The requested token ID does not exist for this tenant.');
+            return $this->userError($global ? 'The requested token ID does not exist for the global principal.' : 'The requested token ID does not exist for this tenant.');
         }
 
         if (! $this->confirmRevoke('token ' . $tokenId)) {
@@ -152,6 +201,10 @@ final class IssueRscServiceToken extends Command
     {
         $identifier = (string) ($this->option('tenant') ?: '');
         if ($identifier === '') {
+            if ((bool) $this->option('global')) {
+                return null;
+            }
+
             $this->errorOutput('The --tenant option is required.');
 
             return null;

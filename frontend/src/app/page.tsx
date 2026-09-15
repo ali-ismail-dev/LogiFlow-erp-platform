@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -153,7 +154,7 @@ export default function RootLandingPage() {
           </p>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            <a
+            <Link
               href="/register"
               className="group inline-flex items-center gap-2 rounded-xl bg-gradient-to-b from-emerald-400 to-emerald-500 px-6 py-3.5 text-sm font-semibold text-zinc-950 shadow-lg shadow-emerald-500/20 transition-all duration-300 hover:from-emerald-300 hover:to-emerald-400 hover:shadow-emerald-500/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-zinc-950"
             >
@@ -173,8 +174,8 @@ export default function RootLandingPage() {
                 />
               </svg>
               Provision New Workspace
-            </a>
-            <a
+            </Link>
+            <Link
               href="/login"
               className="group inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-zinc-900/60 px-6 py-3.5 text-sm font-medium text-cyan-300 backdrop-blur transition-all duration-300 hover:border-cyan-400/60 hover:bg-cyan-500/10 hover:text-cyan-200 *:focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-zinc-950"
             >
@@ -194,7 +195,7 @@ export default function RootLandingPage() {
                   strokeLinejoin="round"
                 />
               </svg>
-            </a>
+            </Link>
           </div>
 
         </section>
@@ -237,7 +238,10 @@ export default function RootLandingPage() {
           <div className="relative overflow-hidden rounded-3xl border border-zinc-800/80 bg-zinc-900/50 p-12 text-center backdrop-blur">
             <div
               className="absolute inset-0 opacity-20"
-              
+              style={{
+                background:
+                  "radial-gradient(circle, rgba(16,185,129,0.15), transparent 70%)",
+              }}
             />
             <div className="relative">
               <h2 className="text-2xl font-bold tracking-tight text-zinc-100 sm:text-3xl">
@@ -247,13 +251,13 @@ export default function RootLandingPage() {
                 Launch your corporate operations cockpit in minutes. Secure,
                 multi-tenant, and tuned for high-velocity logistics.
               </p>
-              <a
+              <Link
                 href="/register"
                 className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-b from-cyan-400 to-cyan-500 px-8 py-4 text-sm font-semibold text-zinc-950 shadow-lg shadow-cyan-500/20 transition-all duration-300 hover:from-cyan-300 hover:to-cyan-400 hover:shadow-cyan-500/40 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-zinc-950"
               >
                 Launch your corporate operations cockpit. Register a new
                 workspace →
-              </a>
+              </Link>
             </div>
           </div>
         </section>

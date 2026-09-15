@@ -6,22 +6,27 @@ token issued to a dedicated, non-human RSC service user.
 
 ## Principal model
 
-One RSC service principal exists per tenant. Each principal has `tenant_id` set
-to that tenant's id and `role = rsc_service`. The reserved email
-`rsc-service@internal.logiflow.invalid` is used for every principal and is
-uniquely constrained per tenant by `tenant_id + email`.
+One global RSC service principal exists with `tenant_id = null` and
+`role = rsc_service`. The reserved email
+`rsc-service@internal.logiflow.invalid` is used for that single account, and the
+backend trusts the RSC service principal to identify the active tenant via the
+`X-Tenant-ID` header.
 
-Tokens are issued per tenant with
-`php artisan logiflow:rsc-token issue --tenant=<slug>`. A token issued for one
-tenant is not valid for another tenant. Sanctum's tenant-scoped user lookup
-returns 401 when the token's owner is not in the requested tenant's scope. This
-is intentional and is the primary isolation guarantee.
+A single Sanctum token is issued to the global principal with
+`php artisan logiflow:rsc-token issue --global`. The frontend stores that value
+in `LOGIFLOW_RSC_SERVICE_TOKEN`. On every request, the RSC sends
+`X-Tenant-ID` to specify which tenant it is rendering for. The backend trusts
+that service principal to correctly identify the tenant, because the RSC derives
+it from the request's subdomain and rejects rendering when they disagree.
 
-Consequently, a single frontend instance that serves multiple tenants must
-supply a per-tenant token. The current implementation supports one token per
-frontend deployment. A future change, such as a token map keyed by tenant slug,
-is required before one frontend can serve more than one tenant from a single
-token environment variable. This is a known limitation, not a defect.
+Tenant isolation for database queries is enforced by `TenantScope` using
+whatever tenant `X-Tenant-ID` resolves to. This is the standard
+backend-for-frontend service-account pattern for a single shared frontend.
+
+Security trade-off: a leaked global token grants read access to all tenants.
+Mitigations include keeping the token on the frontend server only, running the
+frontend on an internal Docker network, rotating the token with a single command,
+and logging all token usage.
 
 ## Token requirements
 

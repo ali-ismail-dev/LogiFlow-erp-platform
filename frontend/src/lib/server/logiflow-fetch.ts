@@ -19,6 +19,9 @@ export async function fetchLogiflow(
   input: RequestInfo | URL,
   { tenant, ...init }: LogiflowFetchOptions,
 ): Promise<Response> {
+  // Single global RSC service token. The RSC is a trusted backend-for-frontend
+  // identity and is authorized to serve any tenant by sending X-Tenant-ID.
+  // See docs/rsc-service-token.md.
   const serviceToken = process.env.LOGIFLOW_RSC_SERVICE_TOKEN?.trim();
   if (!serviceToken) {
     throw new MissingLogiflowServiceTokenError();

@@ -39,6 +39,8 @@ class AppServiceProvider extends ServiceProvider
             return in_array($user->role, [UserRole::SuperAdmin, UserRole::Dispatcher, UserRole::WarehouseManager], true);
         });
 
+        \Laravel\Sanctum\Sanctum::usePersonalAccessTokenModel(\App\Models\PersonalAccessToken::class);
+
         Gate::policy(Dispatch::class, DispatchPolicy::class);
     }
 }

@@ -27,7 +27,17 @@ final class TenantBoundaryMiddleware
             return $next($request);
         }
 
+        if ($user->isRscService()) {
+            // The RSC service principal is a trusted backend-for-frontend identity
+            // and is authorized to specify the tenant via X-Tenant-ID.
+            return $next($request);
+        }
+
         if ((int) $user->tenant_id !== (int) $tenant->id) {
+            if ($request->bearerToken() !== null) {
+                abort(401, 'Unauthorized.');
+            }
+
             abort(403, 'Unauthorized tenant access.');
         }
 

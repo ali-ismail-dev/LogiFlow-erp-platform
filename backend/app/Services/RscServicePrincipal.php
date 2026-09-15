@@ -31,7 +31,43 @@ final class RscServicePrincipal
         private readonly TenantManager $tenantManager,
     ) {}
 
-    public function findForTenant(Tenant $tenant): ?User
+    public function ensureGlobal(): User
+    {
+        $existing = User::withoutTenancy()
+            ->where('email', self::EMAIL)
+            ->whereNull('tenant_id')
+            ->first();
+
+        if ($existing !== null) {
+            if (! $existing->isRscService()) {
+                throw new LogicException('The reserved RSC service email belongs to another role.');
+            }
+
+            return $existing;
+        }
+
+        $user = new User([
+            'role' => UserRole::RscService,
+            'name' => 'RSC Service Principal (Global)',
+            'email' => self::EMAIL,
+            'password' => Hash::make(Str::random(128)),
+        ]);
+        $user->tenant_id = null;
+        $user->email_verified_at = now();
+        $user->saveQuietly();
+
+        return $user;
+    }
+
+    public function findGlobal(): ?User
+    {
+        return User::withoutTenancy()
+            ->where('email', self::EMAIL)
+            ->whereNull('tenant_id')
+            ->first();
+    }
+
+    public function findForTenantLegacy(Tenant $tenant): ?User
     {
         $this->tenantManager->resolve($tenant);
 
@@ -40,7 +76,7 @@ final class RscServicePrincipal
             ->first();
     }
 
-    public function ensureForTenant(Tenant $tenant): User
+    public function ensureForTenantLegacy(Tenant $tenant): User
     {
         $this->tenantManager->resolve($tenant);
 
@@ -73,5 +109,10 @@ final class RscServicePrincipal
         ])->saveQuietly();
 
         return $user;
+    }
+
+    public function ensureForTenant(Tenant $tenant): User
+    {
+        return $this->ensureForTenantLegacy($tenant);
     }
 }

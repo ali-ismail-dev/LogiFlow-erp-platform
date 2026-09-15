@@ -3,7 +3,8 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
-const API_URL = "http://localhost:8000/api/v1/public/register";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
+const API_URL = API_BASE_URL ? `${API_BASE_URL}/public/register` : null;
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -34,6 +35,10 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
+      if (!API_URL) {
+        throw new Error("Registration is not configured. Please contact support.");
+      }
+
       const response = await fetch(API_URL, {
         method: "POST",
         headers: {
