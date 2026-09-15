@@ -11,3 +11,6 @@ frontend/.env.local
 BACKEND_COMMANDS_LEDGER.md
 DOCKER_INFRASTRUCTURE_LEDGER.md
 FRONTEND_COMMANDS_LEDGER.md
+
+# Local AI integration handoff and provider setup notes
+AI_INTEGRATION_STATUS.md

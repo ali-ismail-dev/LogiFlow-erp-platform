@@ -23,7 +23,6 @@ RUN npm config set fetch-retry-maxtimeout 120000 && \
 # development
 # -----------------------------------------------------------------------------
 FROM base AS development
-ENV NODE_ENV=development
 COPY --from=deps /app/node_modules ./node_modules
 EXPOSE 3000
 CMD ["npm", "run", "dev"]

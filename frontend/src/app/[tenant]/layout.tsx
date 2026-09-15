@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { GlobalTopNav } from "@/components/dashboard/GlobalTopNav";
+import { AiCopilotDrawer } from "@/components/ai/AiCopilotDrawer";
 
 interface TenantLayoutProps {
   children: React.ReactNode;
@@ -16,6 +17,7 @@ export default function TenantLayout({ children, params }: TenantLayoutProps) {
     <div className="min-h-screen bg-zinc-950 text-zinc-50 antialiased">
       {!isLoginRoute && <GlobalTopNav tenantSlug={params?.tenant} />}
       <main className="relative">{children}</main>
+      {!isLoginRoute && <AiCopilotDrawer tenantSlug={params?.tenant} />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\AiCopilotController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Auth\PublicRegistrationController;
 use App\Http\Controllers\Api\V1\Logistics\DispatchController;
@@ -57,6 +58,7 @@ Route::middleware(['web', 'tenant', 'auth:sanctum', 'tenant.boundary'])
         Route::put('/dispatches/{dispatch}/assign', [DispatchController::class, 'assignFleet'])->name('dispatches.fleet.assign');
         Route::patch('/dispatches/{dispatch}/status', [DispatchController::class, 'updateStatus'])
             ->name('dispatches.status.update');
+        Route::post('/ai/ask', [AiCopilotController::class, 'ask'])->name('ai.ask');
     });
 
 // Tenant-Scoped Operational Endpoints: authenticated and tenant-resolved.

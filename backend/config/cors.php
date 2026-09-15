@@ -9,9 +9,9 @@ return [
     */
     'paths' => ['api/*', 'sanctum/csrf-cookie', 'broadcasting/auth'],
 
-    'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    'allowed_methods' => ['*'],
 
-    'allowed_origins' => [],
+    'allowed_origins' => ['http://localhost:5173', 'http://localhost:3000'],
 
     /*
     | FIXED: Upgraded regex mappings to support flexible dynamic local port 
@@ -24,7 +24,7 @@ return [
         '#^https?://127\.0\.0\.1:300[0-5]$#',
     ],
 
-    'allowed_headers' => ['Content-Type', 'Accept', 'Authorization', 'X-Requested-With', 'X-XSRF-TOKEN', 'X-Tenant-ID'],
+    'allowed_headers' => ['*'],
 
     'exposed_headers' => [],
 

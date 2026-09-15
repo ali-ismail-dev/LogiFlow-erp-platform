@@ -41,4 +41,22 @@ return [
         ],
     ],
 
+    'ai' => [
+        'provider' => env('AI_DEFAULT_PROVIDER', 'mock'),
+    ],
+
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'model' => env('OPENAI_MODEL', 'gpt-4o'),
+        'pricing' => [
+            'input_per_1k' => env('OPENAI_INPUT_COST', 0.0025),
+            'output_per_1k' => env('OPENAI_OUTPUT_COST', 0.0100),
+        ],
+    ],
+
+    'ollama' => [
+        'base_url' => env('OLLAMA_BASE_URL', 'http://localhost:11434'),
+        'model' => env('OLLAMA_MODEL', 'llama3'),
+    ],
+
 ];
