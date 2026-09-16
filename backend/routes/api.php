@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\PublicRegistrationController;
 use App\Http\Controllers\Api\V1\Logistics\DispatchController;
 use App\Http\Controllers\Api\V1\Logistics\DriverController;
 use App\Http\Controllers\Api\V1\Logistics\VehicleController;
+use App\Http\Controllers\Api\V1\DispatchOptimizationController;
 use App\Http\Controllers\Api\V1\Workspace\OrderController;
 use App\Http\Controllers\Api\V1\Workspace\TenantController;
 use App\Http\Controllers\Api\V1\Workspace\UserController;
@@ -55,6 +56,8 @@ Route::middleware(['web', 'tenant', 'auth:sanctum', 'tenant.boundary'])
         Route::apiResource('orders', OrderController::class)->only(['store']);
         // Manifest creation must occur inside the authenticated tenant workspace.
         Route::post('/dispatches', [DispatchController::class, 'store'])->name('dispatches.store');
+        Route::post('/dispatches/optimize/recommend-vehicle', [DispatchOptimizationController::class, 'recommendVehicle'])->name('dispatches.optimize.recommend-vehicle');
+        Route::post('/dispatches/optimize/suggest-split', [DispatchOptimizationController::class, 'suggestSplit'])->name('dispatches.optimize.suggest-split');
         Route::put('/dispatches/{dispatch}/assign', [DispatchController::class, 'assignFleet'])->name('dispatches.fleet.assign');
         Route::patch('/dispatches/{dispatch}/status', [DispatchController::class, 'updateStatus'])
             ->name('dispatches.status.update');

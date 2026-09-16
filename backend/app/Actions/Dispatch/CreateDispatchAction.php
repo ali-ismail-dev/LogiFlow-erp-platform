@@ -6,7 +6,6 @@ namespace App\Actions\Dispatch;
 
 use App\Enums\OrderStatus;
 use App\Enums\StopStatus;
-use App\Enums\DispatchStatus;
 use App\Models\Dispatch;
 use App\Models\Driver;
 use App\Models\Order;
@@ -14,10 +13,13 @@ use App\Models\Stop;
 use App\Models\Vehicle;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
-use RuntimeException;
 
 final class CreateDispatchAction
 {
+    public function __construct(
+        private readonly ValidateDispatchFeasibilityAction $validateDispatchFeasibility,
+    ) {}
+
     public function __invoke(array $validated, string|int $tenantId): Dispatch
     {
         return DB::transaction(function () use ($validated, $tenantId): Dispatch {
@@ -29,13 +31,14 @@ final class CreateDispatchAction
                 ? Vehicle::query()->whereKey($validated['vehicle_id'])->lockForUpdate()->firstOrFail()
                 : null;
 
-            if ($vehicle !== null && Dispatch::query()
-                ->where('vehicle_identifier', $vehicle->license_plate)
-                ->whereIn('status', [DispatchStatus::Planned->value, DispatchStatus::InTransit->value])
-                ->exists()
-            ) {
-                throw new RuntimeException('The selected vehicle is already assigned to an active dispatch.');
-            }
+            $orderIds = array_values(array_unique($validated['order_ids']));
+
+            $this->validateDispatchFeasibility->execute(
+                (int) $tenantId,
+                $orderIds,
+                $vehicle?->license_plate,
+                $driver?->user?->name,
+            );
 
             $dispatch = Dispatch::query()->create([
                 'tenant_id' => $tenantId,
@@ -47,7 +50,6 @@ final class CreateDispatchAction
                 'scheduled_at' => now(),
             ]);
 
-            $orderIds = array_values(array_unique($validated['order_ids']));
             $orders = Order::query()
                 ->whereIn('id', $orderIds)
                 ->lockForUpdate()

@@ -3,26 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, MapPin, Package, Truck } from "lucide-react";
 import type { Dispatch, Stop } from "@/types/logistics";
-import type { AuthUser } from "@/hooks/useRBAC";
 import { getAddressLine1 } from "@/lib/address";
-import { AssignFleetModal } from "./AssignFleetModal";
 
 interface DispatchBoardProps {
   initialDispatches: Dispatch[];
-  tenantSlug?: string;
-  usersRoster?: AuthUser[];
 }
 
 const PAGE_SIZE = 3;
 
 export function DispatchBoard({
   initialDispatches = [],
-  tenantSlug = "",
-  usersRoster = [],
 }: DispatchBoardProps) {
   const [dispatches, setDispatches] = useState<Dispatch[]>(initialDispatches);
-  const [fleetAssignmentTarget, setFleetAssignmentTarget] =
-    useState<Dispatch | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
@@ -46,25 +38,6 @@ export function DispatchBoard({
       ),
   );
 
-  const tenantDrivers = usersRoster.filter(
-    (u) => String(u.role).toLowerCase() === "driver",
-  );
-
-  function resolveDriverName(manifestDriverName?: string | null): string {
-    if (manifestDriverName) {
-      const match = tenantDrivers.find(
-        (u) =>
-          String(u.name).toLowerCase() ===
-          String(manifestDriverName).toLowerCase(),
-      );
-      if (match) return match.name as string;
-    }
-    if (tenantDrivers.length > 0) {
-      return tenantDrivers[0].name as string;
-    }
-    return "Unassigned";
-  }
-
   function toggle(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -76,27 +49,6 @@ export function DispatchBoard({
       return next;
     });
   }
-
-  const handleAssignmentComplete = (payload: {
-    id: string | number;
-    driver_name: string | null;
-    vehicle_identifier: string | null;
-  }) => {
-    setDispatches((current) =>
-      current.map((dispatch) =>
-        String(dispatch.id) === String(payload.id)
-          ? {
-              ...dispatch,
-              driver_name: payload.driver_name ?? dispatch.driver_name,
-              vehicle_identifier:
-                payload.vehicle_identifier ?? dispatch.vehicle_identifier,
-              status: dispatch.status || "planned",
-            }
-          : dispatch,
-      ),
-    );
-    setFleetAssignmentTarget(null);
-  };
 
   const totalPages = Math.max(1, Math.ceil(dispatches.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -129,8 +81,6 @@ export function DispatchBoard({
             <div className="flex flex-col gap-3">
               {visibleDispatches.map((dispatch) => {
                 const isExpanded = expanded.has(dispatch.id);
-                const missingFleetAssignment =
-                  !dispatch.driver_name || !dispatch.vehicle_identifier;
 
                 return (
                   <div
@@ -153,7 +103,7 @@ export function DispatchBoard({
                           <DispatchStatusBadge status={dispatch.status} />
                         </div>
                         <p className="mt-0.5 truncate text-xs text-zinc-500">
-                          {resolveDriverName(dispatch.driver_name)} ·{" "}
+                          {dispatch.driver_name || "Unassigned"} ·{" "}
                           <span className="font-mono">
                             {dispatch.vehicle_identifier || "N/A"}
                           </span>{" "}
@@ -176,18 +126,6 @@ export function DispatchBoard({
                         }`}
                       />
                     </button>
-
-                    {missingFleetAssignment && (
-                      <div className="border-t border-zinc-800/60 bg-zinc-950/40 px-5 py-3">
-                        <button
-                          type="button"
-                          onClick={() => setFleetAssignmentTarget(dispatch)}
-                          className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-300 transition hover:border-amber-400/50 hover:bg-amber-500/15"
-                        >
-                          Assign fleet
-                        </button>
-                      </div>
-                    )}
 
                     {isExpanded && (
                       <div className="border-t border-zinc-800/60 bg-zinc-950/40 px-5 py-4">
@@ -251,15 +189,6 @@ export function DispatchBoard({
         )}
       </div>
 
-      {fleetAssignmentTarget && (
-        <AssignFleetModal
-          isOpen={Boolean(fleetAssignmentTarget)}
-          tenantSlug={tenantSlug}
-          dispatchId={fleetAssignmentTarget.id}
-          onClose={() => setFleetAssignmentTarget(null)}
-          onAssigned={handleAssignmentComplete}
-        />
-      )}
     </>
   );
 }

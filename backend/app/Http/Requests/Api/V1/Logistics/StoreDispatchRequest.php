@@ -27,12 +27,12 @@ final class StoreDispatchRequest extends FormRequest
                 Rule::exists('orders', 'id')->where(fn($query) => $query->where('tenant_id', $tenantId)),
             ],
             'driver_id' => [
-                'nullable',
+                'required',
                 'integer',
                 Rule::exists('drivers', 'id')->where(fn($query) => $query->where('tenant_id', $tenantId)),
             ],
             'vehicle_id' => [
-                'nullable',
+                'required',
                 'integer',
                 Rule::exists('vehicles', 'id')->where(fn($query) => $query->where('tenant_id', $tenantId)),
             ],

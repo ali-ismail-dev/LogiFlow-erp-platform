@@ -126,7 +126,7 @@ class DispatchControllerTest extends TestCase
     }
 
     #[Test]
-    public function it_allows_creating_a_planned_manifest_without_driver_or_vehicle_assignment(): void
+    public function it_rejects_creating_a_manifest_without_driver_or_vehicle_assignment(): void
     {
         $tenant = Tenant::factory()->create([
             'name' => 'Acme Fleet',
@@ -158,22 +158,14 @@ class DispatchControllerTest extends TestCase
             'order_ids' => [$firstOrder->id, $secondOrder->id],
         ], ['X-Tenant-ID' => 'acme-fleet']);
 
-        $response->assertStatus(201);
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['driver_id', 'vehicle_id']);
 
-        $dispatch = Dispatch::query()->firstOrFail();
-
-        $this->assertDatabaseHas('dispatches', [
-            'id' => $dispatch->id,
-            'tenant_id' => $tenant->id,
-            'driver_name' => null,
-            'vehicle_identifier' => null,
-            'status' => DispatchStatus::Planned->value,
-        ]);
-
+        $this->assertDatabaseCount('dispatches', 0);
         $this->assertDatabaseHas('orders', [
             'id' => $firstOrder->id,
-            'dispatch_id' => $dispatch->id,
-            'status' => OrderStatus::Dispatched->value,
+            'dispatch_id' => null,
+            'status' => OrderStatus::Pending->value,
         ]);
     }
 

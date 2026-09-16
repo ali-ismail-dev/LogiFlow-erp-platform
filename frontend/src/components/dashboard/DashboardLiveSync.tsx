@@ -147,7 +147,7 @@ export function DashboardLiveSync({
       <div className="grid grid-cols-1 gap-5 p-5 lg:grid-cols-12 lg:gap-6 lg:p-8">
         <section className="lg:col-span-12"><OperationalControlBoard tenantSlug={tenantSlug} /></section>
         <aside className="lg:col-span-3"><MetricsFeed initialMetrics={metrics} ledgerEntries={auditTrailEntries} onClearLedger={() => setAuditTrailEntries([])} /></aside>
-        <section className="lg:col-span-6"><DispatchBoard initialDispatches={dispatches} tenantSlug={tenantSlug} usersRoster={usersRoster} /></section>
+        <section className="lg:col-span-6"><DispatchBoard initialDispatches={dispatches} /></section>
         <aside className="lg:col-span-3"><MonitoringSidebar usersRoster={usersRoster} /></aside>
       </div>
       {toastOpen && (

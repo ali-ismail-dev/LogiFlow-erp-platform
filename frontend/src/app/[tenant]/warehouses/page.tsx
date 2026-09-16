@@ -417,7 +417,7 @@ export default function FacilityHubPage() {
               href={dashboardHref}
               className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> Dashboard Cockpit
+              <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
             </Link>
             <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
               <span className="font-mono text-xs normal-case tracking-normal text-zinc-400">

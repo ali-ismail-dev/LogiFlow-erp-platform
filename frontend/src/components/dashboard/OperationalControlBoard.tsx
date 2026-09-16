@@ -41,7 +41,7 @@ export function OperationalControlBoard({
   const controlItems: BoardItem[] = [
     {
       id: "vehicles",
-      title: "Fleet Equipment Board",
+      title: "Vehicles",
       description: "Audit cargo van transport assets and monitor vehicle status",
       icon: Truck,
       href: buildTenantAwarePath("/vehicles", tenantSlug),
@@ -53,7 +53,7 @@ export function OperationalControlBoard({
     },
     {
       id: "drivers",
-      title: "Operative Directory Board",
+      title: "Drivers",
       description: "Link active commercial operator accounts and manage driver roster",
       icon: Users,
       href: buildTenantAwarePath("/drivers", tenantSlug),
@@ -65,7 +65,7 @@ export function OperationalControlBoard({
     },
     {
       id: "employees",
-      title: "Employee Directory Board",
+      title: "Employees",
       description: "Manage employee accounts, roles, and access across the organization",
       icon: UsersRound,
       href: buildTenantAwarePath("/employees", tenantSlug),
@@ -77,7 +77,7 @@ export function OperationalControlBoard({
     },
     {
       id: "dispatches",
-      title: "Route Composition Wizard",
+      title: "Create Dispatch",
       description: "Bundle pending unassigned orders and create new dispatch routes",
       icon: Route,
       href: buildTenantAwarePath("/dispatches/new", tenantSlug),
@@ -89,7 +89,7 @@ export function OperationalControlBoard({
     },
     {
       id: "order-intake",
-      title: "Cargo Order Intake",
+      title: "New Order",
       description: "Manually ingest new corporate client cargo orders into the unassigned queue",
       icon: Package,
       href: buildTenantAwarePath("/orders/new", tenantSlug),
@@ -101,7 +101,7 @@ export function OperationalControlBoard({
     },
     {
       id: "warehouses",
-      title: "Facility Hub Portal",
+      title: "Warehouses",
       description: "Register and monitor fulfillment facilities across the active network",
       icon: Building2,
       href: buildTenantAwarePath("/warehouses", tenantSlug),

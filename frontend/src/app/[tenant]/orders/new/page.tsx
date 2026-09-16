@@ -409,7 +409,7 @@ export default function NewCargoOrderPage() {
               <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
                 <span className="font-mono text-zinc-400">{tenant}</span>
                 <span className="px-2 text-zinc-700">•</span>
-                Cargo order intake
+                New order
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
                 Manual Cargo Order Ingestion

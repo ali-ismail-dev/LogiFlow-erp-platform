@@ -370,7 +370,7 @@ export default function EmployeesPage() {
               href={dashboardHref}
               className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
             >
-              ← Dashboard Cockpit
+              ← Dashboard
             </Link>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight">
               Team Directory

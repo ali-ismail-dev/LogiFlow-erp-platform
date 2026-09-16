@@ -65,7 +65,7 @@ export function GlobalTopNav({ tenantSlug }: GlobalTopNavProps) {
   const navigationItems: NavigationItem[] = [
     {
       href: `${tenantPath}/dashboard`,
-      label: "Dashboard Cockpit",
+      label: "Dashboard",
       icon: (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <rect x="2" y="2" width="4" height="4" rx="0.5" stroke="currentColor" strokeWidth="1.5" />
@@ -77,7 +77,7 @@ export function GlobalTopNav({ tenantSlug }: GlobalTopNavProps) {
     },
     {
       href: `${tenantPath}/warehouses`,
-      label: "Facility Hub Portal",
+      label: "Warehouses",
       icon: (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M2 13V3h10v10M1 13h12M5 6h4M5 9h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -86,7 +86,7 @@ export function GlobalTopNav({ tenantSlug }: GlobalTopNavProps) {
     },
     {
       href: `${tenantPath}/orders/new`,
-      label: "Cargo Order Intake",
+      label: "New Order",
       icon: (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M3 4h8l1 6H2L3 4Zm3 4h2M4 10h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -95,7 +95,7 @@ export function GlobalTopNav({ tenantSlug }: GlobalTopNavProps) {
     },
     {
       href: `${tenantPath}/vehicles`,
-      label: "Fleet Equipment Board",
+      label: "Vehicles",
       icon: (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M2 7L4 3h4l2 4M3 7v4h8V7M3 7h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -104,7 +104,7 @@ export function GlobalTopNav({ tenantSlug }: GlobalTopNavProps) {
     },
     {
       href: `${tenantPath}/drivers`,
-      label: "Operative Directory Board",
+      label: "Drivers",
       icon: (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <circle cx="5" cy="5" r="2" stroke="currentColor" strokeWidth="1.5" />
@@ -114,7 +114,7 @@ export function GlobalTopNav({ tenantSlug }: GlobalTopNavProps) {
     },
     {
       href: `${tenantPath}/employees`,
-      label: "Employee Directory Board",
+      label: "Employees",
       icon: (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <circle cx="5" cy="5" r="2" stroke="currentColor" strokeWidth="1.5" />
@@ -124,7 +124,7 @@ export function GlobalTopNav({ tenantSlug }: GlobalTopNavProps) {
     },
     {
       href: `${tenantPath}/dispatches/new`,
-      label: "Route Composition Wizard",
+      label: "Create Dispatch",
       icon: (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <path d="M2 3h4l2 4h4M2 11h4l2-4h4M2 3v8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -148,7 +148,7 @@ export function GlobalTopNav({ tenantSlug }: GlobalTopNavProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href={`${tenantPath}/dashboard`} className="flex items-center gap-3" aria-label="Open dashboard cockpit">
+        <Link href={`${tenantPath}/dashboard`} className="flex items-center gap-3" aria-label="Open dashboard">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-emerald-400" aria-hidden="true">
               <path fillRule="evenodd" clipRule="evenodd" d="M9 2L15.5 5.75V12.25L9 16L2.5 12.25V5.75L9 2ZM9 11.5L12.5 9.5V6.5L9 8.5L5.5 6.5V9.5L9 11.5Z" fill="currentColor" />

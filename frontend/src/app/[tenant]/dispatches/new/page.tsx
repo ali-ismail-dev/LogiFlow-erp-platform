@@ -12,6 +12,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useRBAC } from "@/hooks/useRBAC";
 import { createApiClient } from "@/lib/api/apiClient";
 import { buildTenantAwarePath } from "@/lib/tenant-routing";
+import { CapacityGauge } from "@/components/dispatch/CapacityGauge";
+import { ResourceSelectOption } from "@/components/dispatch/ResourceSelectOption";
+import { OrderSplitModal, type SuggestedBatch } from "@/components/dispatch/OrderSplitModal";
+import { VehicleRecommendationCard, type VehicleRecommendation } from "@/components/dispatch/VehicleRecommendationCard";
 
 interface OrderRecord {
   id: number | string;
@@ -41,6 +45,16 @@ interface VehicleRecord {
   license_plate?: string | null;
   vehicle_type?: string | null;
   status?: string | null;
+  name?: string | null;
+  max_weight_capacity_kg?: number | string | null;
+}
+
+interface DispatchRecord {
+  id: number | string;
+  reference_code?: string | null;
+  status?: string | null;
+  driver_name?: string | null;
+  vehicle_identifier?: string | null;
 }
 
 interface ApiEnvelope<T> {
@@ -191,7 +205,16 @@ export default function NewDispatchPage() {
     : dashboardHref;
 
   const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [drivers, setDrivers] = useState<DriverRecord[]>([]);
+  const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
+  const [activeDispatches, setActiveDispatches] = useState<DispatchRecord[]>([]);
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState("");
+  const [selectedDriverId, setSelectedDriverId] = useState("");
+  const [recommendations, setRecommendations] = useState<VehicleRecommendation[]>([]);
+  const [splitBatches, setSplitBatches] = useState<SuggestedBatch[]>([]);
+  const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ vehicle_identifier?: string; driver_name?: string }>({});
   const [isHydrating, setIsHydrating] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -249,6 +272,27 @@ export default function NewDispatchPage() {
     );
   }, [buildClient, tenant]);
 
+  const fetchFleet = useCallback(async () => {
+    const client = buildClient();
+    const headers = { "X-Tenant-ID": tenant };
+    const [driversResponse, vehiclesResponse, dispatchesResponse] = await Promise.all([
+      client.get<ApiEnvelope<DriverRecord[]>>("/drivers", { headers }),
+      client.get<ApiEnvelope<VehicleRecord[]>>("/vehicles", { headers }),
+      client.get<ApiEnvelope<DispatchRecord[]>>("/dispatches", { headers }),
+    ]);
+
+    if (driversResponse.status !== 200 || vehiclesResponse.status !== 200 || dispatchesResponse.status !== 200) {
+      throw new Error("Unable to load current fleet availability.");
+    }
+
+    setDrivers(normalizeList(driversResponse.data?.data as DriverRecord | DriverRecord[] | null | undefined));
+    setVehicles(normalizeList(vehiclesResponse.data?.data as VehicleRecord | VehicleRecord[] | null | undefined));
+    setActiveDispatches(normalizeList(dispatchesResponse.data?.data as DispatchRecord | DispatchRecord[] | null | undefined).filter((dispatch) => {
+      const status = String(dispatch.status ?? "").toLowerCase();
+      return status === "planned" || status === "in_transit";
+    }));
+  }, [buildClient, tenant]);
+
   useEffect(() => {
     if (rbacLoading || !authorized) {
       return;
@@ -261,7 +305,7 @@ export default function NewDispatchPage() {
       setToast((prev) => ({ ...prev, open: false }));
 
       try {
-        await fetchOrders();
+        await Promise.all([fetchOrders(), fetchFleet()]);
         setCurrentPage(1);
       } catch (error) {
         if (!isActive) {
@@ -285,7 +329,7 @@ export default function NewDispatchPage() {
     return () => {
       isActive = false;
     };
-  }, [authorized, fetchOrders, rbacLoading, showToast]);
+  }, [authorized, fetchFleet, fetchOrders, rbacLoading, showToast]);
 
   const selectedOrders = useMemo(
     () =>
@@ -301,6 +345,47 @@ export default function NewDispatchPage() {
       }, 0),
     [selectedOrders],
   );
+
+  const selectedVehicle = vehicles.find((vehicle) => String(vehicle.id) === selectedVehicleId);
+  const activeVehicleDispatch = activeDispatches.find((dispatch) => String(dispatch.vehicle_identifier ?? "") === String(selectedVehicle?.license_plate ?? ""));
+  const selectedDriver = drivers.find((driver) => String(driver.id) === selectedDriverId);
+  const selectedDriverName = selectedDriver?.name ?? "";
+  const activeDriverDispatch = activeDispatches.find((dispatch) => String(dispatch.driver_name ?? "") === selectedDriverName);
+
+  useEffect(() => {
+    if (selectedOrderIds.length === 0) {
+      setRecommendations([]);
+      return;
+    }
+
+    let isActive = true;
+    buildClient().post<OptimizationResponse>("/dispatches/optimize/recommend-vehicle", { order_ids: selectedOrderIds }, { headers: { "X-Tenant-ID": tenant } })
+      .then((response) => {
+        if (isActive && response.status >= 200 && response.status < 300) setRecommendations(response.data.data.recommendations ?? []);
+      })
+      .catch(() => {
+        if (isActive) setRecommendations([]);
+      });
+
+    return () => { isActive = false; };
+  }, [buildClient, selectedOrderIds, tenant]);
+
+  const applyRecommendedVehicle = useCallback((identifier: string) => {
+    const vehicle = vehicles.find((candidate) => candidate.license_plate === identifier);
+    if (vehicle) setSelectedVehicleId(String(vehicle.id));
+  }, [vehicles]);
+
+  const loadSplitPlan = useCallback(async () => {
+    if (selectedOrderIds.length === 0) return;
+    try {
+      const response = await buildClient().post<OptimizationResponse>("/dispatches/optimize/suggest-split", { order_ids: selectedOrderIds }, { headers: { "X-Tenant-ID": tenant } });
+      const batches = response.data.data.suggested_batches ?? [];
+      setSplitBatches(batches);
+      setIsSplitModalOpen(batches.length > 1);
+    } catch {
+      showToast("Unable to prepare an automatic order split.", "error");
+    }
+  }, [buildClient, selectedOrderIds, showToast, tenant]);
 
   const totalPages = Math.max(1, Math.ceil(orders.length / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -343,13 +428,28 @@ export default function NewDispatchPage() {
         return;
       }
 
+      if (!selectedVehicleId || !selectedDriverId) {
+        setFieldErrors({
+          vehicle_identifier: selectedVehicleId ? undefined : "Select a vehicle before dispatching.",
+          driver_name: selectedDriverId ? undefined : "Select a driver before dispatching.",
+        });
+        showToast(
+          "Assign both a vehicle and a driver before dispatching an order.",
+          "error",
+        );
+        return;
+      }
+
       setIsSubmitting(true);
       setToast((prev) => ({ ...prev, open: false }));
+      setFieldErrors({});
 
       try {
         const client = buildClient();
         const payload = {
           order_ids: selectedOrderIds,
+          vehicle_id: Number(selectedVehicleId),
+          driver_id: Number(selectedDriverId),
         };
 
         const response = await client.post<DispatchCreateResponse>(
@@ -361,6 +461,16 @@ export default function NewDispatchPage() {
             },
           },
         );
+
+        if (response.status === 422) {
+          const errorData = response.data as ErrorResponse;
+          const errors = errorData.errors ?? {};
+          setFieldErrors({
+            vehicle_identifier: Array.isArray(errors.vehicle_identifier) ? errors.vehicle_identifier[0] : errors.vehicle_identifier,
+            driver_name: Array.isArray(errors.driver_name) ? errors.driver_name[0] : errors.driver_name,
+          });
+          throw new Error(errorData.message ?? "Resolve the highlighted feasibility issues before submitting.");
+        }
 
         if (response.status < 200 || response.status >= 300) {
           throw new Error("The backend rejected this dispatch manifest.");
@@ -379,7 +489,7 @@ export default function NewDispatchPage() {
         setIsSubmitting(false);
       }
     },
-    [authorized, buildClient, router, selectedOrderIds, showToast, tenant],
+    [authorized, buildClient, router, selectedDriverId, selectedOrderIds, selectedVehicleId, showToast, tenant],
   );
 
   if (rbacLoading) {
@@ -597,6 +707,98 @@ export default function NewDispatchPage() {
               <aside className="space-y-6">
                 <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/20 backdrop-blur-sm">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                    Fleet feasibility
+                  </p>
+                  <div className="mt-4 space-y-4">
+                    <div>
+                      <label htmlFor="dispatch-vehicle" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                        Vehicle
+                      </label>
+                      <select
+                        id="dispatch-vehicle"
+                        value={selectedVehicleId}
+                        onChange={(event) => {
+                          setSelectedVehicleId(event.target.value);
+                          setFieldErrors((current) => ({ ...current, vehicle_identifier: undefined }));
+                        }}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none"
+                      >
+                        <option value="">Select vehicle</option>
+                        {vehicles.map((vehicle) => {
+                          const busyDispatch = activeDispatches.find((dispatch) => dispatch.vehicle_identifier === vehicle.license_plate);
+                          return (
+                            <option key={vehicle.id} value={String(vehicle.id)} disabled={Boolean(busyDispatch)}>
+                              {vehicle.name ?? vehicle.license_plate ?? `Vehicle ${vehicle.id}`} - {busyDispatch ? `Busy: ${busyDispatch.reference_code ?? "active dispatch"}` : "Available"}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {selectedVehicle && (
+                        <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+                          <ResourceSelectOption
+                            label={selectedVehicle.name ?? selectedVehicle.license_plate ?? "Selected vehicle"}
+                            sublabel={selectedVehicle.license_plate ?? undefined}
+                            status={activeVehicleDispatch ? "busy" : "available"}
+                            activeDispatchCode={activeVehicleDispatch?.reference_code ?? undefined}
+                          />
+                          <div className="mt-3">
+                            <CapacityGauge
+                              currentWeightKg={totalSelectedWeightKg}
+                              maxCapacityKg={Number(selectedVehicle.max_weight_capacity_kg ?? 0)}
+                              onOverCapacity={loadSplitPlan}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="mt-4">
+                        <VehicleRecommendationCard
+                          recommendations={recommendations}
+                          selectedVehicleIdentifier={selectedVehicle?.license_plate ?? undefined}
+                          onApplyVehicle={applyRecommendedVehicle}
+                        />
+                      </div>
+                      {fieldErrors.vehicle_identifier && <p className="mt-1.5 text-xs text-red-300">{fieldErrors.vehicle_identifier}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="dispatch-driver" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                        Driver
+                      </label>
+                      <select
+                        id="dispatch-driver"
+                        value={selectedDriverId}
+                        onChange={(event) => {
+                          setSelectedDriverId(event.target.value);
+                          setFieldErrors((current) => ({ ...current, driver_name: undefined }));
+                        }}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none"
+                      >
+                        <option value="">Select driver</option>
+                        {drivers.map((driver) => {
+                          const driverName = driver.name ?? driver.email ?? `Driver ${driver.id}`;
+                          const busyDispatch = activeDispatches.find((dispatch) => dispatch.driver_name === driverName);
+                          return (
+                            <option key={driver.id} value={String(driver.id)} disabled={Boolean(busyDispatch)}>
+                              {driverName} - {busyDispatch ? `Busy: ${busyDispatch.reference_code ?? "active dispatch"}` : "Available"}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {selectedDriver && (
+                        <div className="mt-2">
+                          <ResourceSelectOption
+                            label={selectedDriverName}
+                            sublabel={selectedDriver.email ?? undefined}
+                            status={activeDriverDispatch ? "busy" : "available"}
+                            activeDispatchCode={activeDriverDispatch?.reference_code ?? undefined}
+                          />
+                        </div>
+                      )}
+                      {fieldErrors.driver_name && <p className="mt-1.5 text-xs text-red-300">{fieldErrors.driver_name}</p>}
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-5 shadow-2xl shadow-black/20 backdrop-blur-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
                     Manifest totals
                   </p>
 
@@ -657,9 +859,8 @@ export default function NewDispatchPage() {
 
                   <div className="mt-5 space-y-4">
                     <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-sm text-zinc-300">
-                      Planned manifests are created without fleet locking.
-                      Fleet assignment is handled in the next stage from the
-                      operations dashboard.
+                      Dispatches require an assigned vehicle and driver before
+                      they can be created.
                     </div>
 
                     <input
@@ -713,6 +914,37 @@ export default function NewDispatchPage() {
         )}
       </div>
 
+      <OrderSplitModal
+        isOpen={isSplitModalOpen}
+        totalWeightKg={totalSelectedWeightKg}
+        batches={splitBatches}
+        onCreateFirstBatch={async (batch) => {
+          const vehicle = vehicles.find((candidate) => candidate.license_plate === batch.recommended_vehicle);
+            if (!vehicle || !selectedDriverId) {
+              showToast(
+                "Assign both a vehicle and a driver before creating a dispatch batch.",
+                "error",
+              );
+              return;
+            }
+          try {
+            const response = await buildClient().post<DispatchCreateResponse>("/dispatches", {
+              order_ids: batch.order_ids,
+                vehicle_id: vehicle.id,
+                driver_id: Number(selectedDriverId),
+            }, { headers: { "X-Tenant-ID": tenant } });
+            if (response.status < 200 || response.status >= 300) throw new Error("The backend rejected Batch 1.");
+            setSelectedOrderIds(splitBatches.slice(1).flatMap((remainingBatch) => remainingBatch.order_ids));
+            setSelectedVehicleId("");
+            setIsSplitModalOpen(false);
+            showToast("Batch 1 created. Remaining orders are ready for a secondary dispatch.", "success");
+          } catch (error) {
+            showToast(resolveErrorMessage(error), "error");
+          }
+        }}
+        onClose={() => setIsSplitModalOpen(false)}
+      />
+
       <ToastNotification
         open={toast.open}
         message={toast.message}
@@ -752,4 +984,16 @@ function resolveErrorMessage(error: unknown): string {
   }
 
   return "The dispatch manifest could not be created. Please review the route data and try again.";
+}
+
+interface ErrorResponse {
+  message?: string;
+  errors?: Record<string, string[] | string>;
+}
+
+interface OptimizationResponse {
+  data: {
+    recommendations?: VehicleRecommendation[];
+    suggested_batches?: SuggestedBatch[];
+  };
 }

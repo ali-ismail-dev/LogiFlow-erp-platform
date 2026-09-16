@@ -33,6 +33,10 @@ interface VehicleAsset {
   license_plate: string;
   max_weight_capacity_kg: number | string;
   is_active: boolean;
+  active_dispatch?: {
+    reference_code?: string | null;
+    status?: string | null;
+  } | null;
 }
 
 /** Laravel-style envelope wrapper used by the API gateway. */
@@ -399,7 +403,7 @@ export default function FleetVehiclesPage() {
               href={dashboardHref}
               className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
             >
-              ← Dashboard Cockpit
+              ← Dashboard
             </Link>
             <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
               <span className="font-mono text-xs normal-case tracking-normal text-zinc-400">
@@ -466,13 +470,23 @@ export default function FleetVehiclesPage() {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider font-mono ${statusTone(
-                          Boolean(vehicle.is_active),
-                        )}`}
-                      >
-                        {vehicle.is_active ? "Active" : "Inactive"}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-block rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider font-mono ${statusTone(Boolean(vehicle.is_active))}`}>
+                          {vehicle.is_active ? "Active" : "Inactive"}
+                        </span>
+                        {vehicle.active_dispatch ? (
+                          <Link
+                            href={buildTenantAwarePath(`/dispatches/${vehicle.active_dispatch.reference_code ?? ""}`, tenant)}
+                            className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-sky-300 hover:border-sky-400/60"
+                          >
+                            Active: {vehicle.active_dispatch.reference_code ?? "Dispatch"}
+                          </Link>
+                        ) : (
+                          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-300">
+                            Available
+                          </span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
