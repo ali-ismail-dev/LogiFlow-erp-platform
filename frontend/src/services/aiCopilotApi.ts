@@ -61,6 +61,7 @@ export async function askCopilot(
   prompt: string,
   contextHistory: Array<Record<string, unknown>> = [],
   tenant?: string,
+  signal?: AbortSignal,
 ): Promise<AiCopilotResponse> {
   const normalizedPrompt = prompt.trim();
 
@@ -77,7 +78,7 @@ export async function askCopilot(
     }).post<AiCopilotEnvelope>("/ai/ask", {
       prompt: normalizedPrompt,
       context_history: contextHistory,
-    });
+    }, { signal });
 
     if (response.status < 200 || response.status >= 300) {
       const responseBody = response.data as { error?: unknown; message?: unknown } | null | undefined;
@@ -121,7 +122,11 @@ export async function askCopilot(
     }
 
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new AiCopilotApiError("The Copilot took too long to respond. Please try again.");
+      throw error;
+    }
+
+    if (error instanceof Error && error.name === "AbortError") {
+      throw error;
     }
 
     throw new AiCopilotApiError("The Copilot is temporarily unavailable. Please try again.");

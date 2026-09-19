@@ -37,6 +37,11 @@ class MockLlmProvider implements LlmProviderInterface
      */
     public function ask(AiConversationRequest $request, array $availableTools = []): AiResponse
     {
+        $mockDelayMilliseconds = (int) env('AI_MOCK_DELAY_MS', 0);
+        if ($mockDelayMilliseconds > 0) {
+            usleep($mockDelayMilliseconds * 1000);
+        }
+
         $prompt = Str::lower($request->prompt);
 
         return match (true) {

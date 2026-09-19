@@ -82,6 +82,7 @@ services:
       APP_KEY: ${APP_KEY}
       APP_DEBUG: ${APP_DEBUG}
       APP_URL: ${APP_URL}
+      AI_MOCK_DELAY_MS: ${AI_MOCK_DELAY_MS:-0}
       LOG_CHANNEL: ${LOG_CHANNEL:-stack}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       DB_CONNECTION: pgsql

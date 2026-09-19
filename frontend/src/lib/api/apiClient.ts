@@ -59,6 +59,7 @@ export interface ApiClientConfig {
 export interface RequestOptions {
   headers?: Record<string, string>;
   params?: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 /**
@@ -147,7 +148,11 @@ export class ApiClient {
     }
 
     const controller = new AbortController();
+    const abortRequest = () => controller.abort();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    options?.signal?.addEventListener("abort", abortRequest, { once: true });
+    if (options?.signal?.aborted) controller.abort();
 
     try {
       const response = await fetch(url.toString(), {
@@ -167,6 +172,7 @@ export class ApiClient {
       };
     } finally {
       clearTimeout(timeoutId);
+      options?.signal?.removeEventListener("abort", abortRequest);
     }
   }
 

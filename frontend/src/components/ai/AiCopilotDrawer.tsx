@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { AlertCircle, Bot, ChevronDown, CircleStop, Command, Loader2, Send, Sparkles, X } from "lucide-react";
+import { AlertCircle, Bot, ChevronDown, CircleStop, Command, Loader2, MessageSquarePlus, Send, Sparkles, X } from "lucide-react";
 import { AiCitationBadge } from "@/components/ai/AiCitationBadge";
 import { AiPresetChips } from "@/components/ai/AiPresetChips";
+import { useSessionStorage } from "@/hooks/useSessionStorage";
 import {
   AiCopilotApiError,
   askCopilot,
@@ -28,7 +29,13 @@ type AssistantMessage = {
   response: AiCopilotResponse;
 };
 
-type CopilotMessage = UserMessage | AssistantMessage;
+type SystemMessage = {
+  id: string;
+  role: "system";
+  content: string;
+};
+
+type CopilotMessage = UserMessage | AssistantMessage | SystemMessage;
 
 const providerLabels: Record<string, string> = {
   mock: "Mock Engine",
@@ -51,13 +58,15 @@ function responseToHistory(response: AiCopilotResponse): Array<Record<string, un
 
 export function AiCopilotDrawer({ tenantSlug, provider = "mock" }: AiCopilotDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<CopilotMessage[]>([]);
+  const [messages, setMessages] = useSessionStorage<CopilotMessage[]>("ai_copilot_messages", []);
   const [isLoading, setIsLoading] = useState(false);
   const [inputPrompt, setInputPrompt] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUsage, setLastUsage] = useState<AiCopilotResponse["usage"] | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const requestGenerationRef = useRef(0);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -87,22 +96,31 @@ export function AiCopilotDrawer({ tenantSlug, provider = "mock" }: AiCopilotDraw
     const previousHistory = messages.flatMap((message) =>
       message.role === "user"
         ? [{ role: "user", content: message.content }]
-        : responseToHistory(message.response),
+        : message.role === "assistant"
+          ? responseToHistory(message.response)
+          : [{ role: "system", content: message.content }],
     );
 
     setMessages((current) => [...current, userMessage]);
     setInputPrompt("");
     setErrorMessage(null);
     setIsLoading(true);
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    const requestGeneration = requestGenerationRef.current;
 
     try {
-      const response = await askCopilot(prompt, previousHistory.slice(-10), tenantSlug);
+      const response = await askCopilot(prompt, previousHistory.slice(-10), tenantSlug, abortController.signal);
+      if (requestGeneration !== requestGenerationRef.current) return;
+
       setMessages((current) => [
         ...current,
         { id: `assistant-${Date.now()}`, role: "assistant", response },
       ]);
       setLastUsage(response.usage);
     } catch (error) {
+      if (requestGeneration !== requestGenerationRef.current) return;
+
       const requestError = error as {
         response?: { status?: number; data?: unknown };
         message?: string;
@@ -113,13 +131,43 @@ export function AiCopilotDrawer({ tenantSlug, provider = "mock" }: AiCopilotDraw
         requestError.response?.data || requestError.message,
       );
 
+      const isCancelled = (error instanceof DOMException && error.name === "AbortError")
+        || (error instanceof Error && error.name === "AbortError");
+
+      if (isCancelled) {
+        setMessages((current) => [
+          ...current,
+          { id: `system-${Date.now()}`, role: "system", content: "Request stopped by user." },
+        ]);
+        return;
+      }
+
       const message = error instanceof AiCopilotApiError
         ? error.message
         : "The Copilot is temporarily unavailable. Please try again.";
       setErrorMessage(message);
     } finally {
+      if (requestGeneration !== requestGenerationRef.current) return;
+
+      abortControllerRef.current = null;
       setIsLoading(false);
     }
+  }
+
+  function handleStop() {
+    abortControllerRef.current?.abort();
+  }
+
+  function handleNewChat() {
+    requestGenerationRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    setMessages([]);
+    setErrorMessage(null);
+    setLastUsage(null);
+    setInputPrompt("");
+    setIsLoading(false);
+    inputRef.current?.focus();
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -173,14 +221,25 @@ export function AiCopilotDrawer({ tenantSlug, provider = "mock" }: AiCopilotDraw
                   <p className="mt-0.5 text-xs text-zinc-500">Operational answers grounded in your workspace</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-800 text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-100"
-                aria-label="Close Copilot"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleNewChat}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 text-zinc-400 transition-colors hover:border-emerald-400/50 hover:text-emerald-300"
+                  aria-label="Start a new chat"
+                  title="Start a new chat to clear context"
+                >
+                  <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-100"
+                  aria-label="Close Copilot"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-zinc-800 sm:px-5">
@@ -202,8 +261,12 @@ export function AiCopilotDrawer({ tenantSlug, provider = "mock" }: AiCopilotDraw
                       <div className="max-w-[85%] rounded-2xl rounded-br-md bg-emerald-500 px-4 py-3 text-sm leading-6 text-zinc-950 shadow-lg shadow-emerald-950/20">
                         {message.content}
                       </div>
-                    ) : (
+                    ) : message.role === "assistant" ? (
                       <AssistantResponse response={message.response} onCitationClick={handleCitationClick} />
+                    ) : (
+                      <div className="rounded-xl border border-zinc-700/80 bg-zinc-900/60 px-4 py-2.5 text-xs text-zinc-400">
+                        {message.content}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -259,9 +322,11 @@ export function AiCopilotDrawer({ tenantSlug, provider = "mock" }: AiCopilotDraw
                   className="min-h-12 flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-5 text-zinc-100 outline-none placeholder:text-zinc-600"
                 />
                 <button
-                  type="submit"
-                  disabled={isLoading || inputPrompt.trim().length < 3}
-                  aria-label={isLoading ? "Copilot is working" : "Send prompt"}
+                  type={isLoading ? "button" : "submit"}
+                  onClick={isLoading ? handleStop : undefined}
+                  disabled={!isLoading && inputPrompt.trim().length < 3}
+                  aria-label={isLoading ? "Stop request" : "Send prompt"}
+                  title={isLoading ? "Stop request" : "Send prompt"}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-400 text-zinc-950 transition-colors hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
                 >
                   {isLoading ? <CircleStop className="h-4 w-4" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}
